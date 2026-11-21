@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -23,7 +24,7 @@ import java.util.regex.Pattern;
 final class SubmissionClient {
     private static final Pattern COOKIE = Pattern.compile("(?:__Secure-)?better-auth\\.session_token=[A-Za-z0-9._%+~/=\\-]+");
     private static final Pattern ACTION = Pattern.compile("createServerReference[^\\w\"]{0,12}\"([a-f0-9]{40,64})\"[^;]{0,180}?\"loginPassword\"");
-    private static final Pattern FLIGHT = Pattern.compile("self\\.__next_f\\.push\\(\\[1,(\"(?:\\\\.|[^\"\\\\])*\")\\]\\)");
+    private static final String FLIGHT_PUSH = "self.__next_f.push([1,";
     private static final Pattern FIELDS = Pattern.compile("\"submissionFormat\"\\s*:\\s*(\\[[^\\]]*])");
     private static final Pattern LANGUAGES = Pattern.compile("\"languages\"\\s*:\\s*(\\{[^{}]*})");
     private static final Pattern GUIDELINES = Pattern.compile("\"guidelinesAccepted\"\\s*:\\s*true\\b");
@@ -209,11 +210,7 @@ final class SubmissionClient {
     static Options submitOptions(String html, String language) throws IOException {
         var document = Jsoup.parse(html);
         if (document.body().text().contains("Accedi per inviare soluzioni")) throw new LoginRequired();
-        var data = new StringBuilder();
-        for (var script : document.select("script")) {
-            var matcher = FLIGHT.matcher(script.data());
-            while (matcher.find()) data.append(GSON.fromJson(matcher.group(1), String.class));
-        }
+        var data = flightData(document);
         var fields = FIELDS.matcher(data);
         var languages = LANGUAGES.matcher(data);
         if (!fields.find() || !languages.find()) throw new IOException("Il modulo di invio non è disponibile sul sito per questo problema.");
@@ -229,6 +226,38 @@ final class SubmissionClient {
                 .filter(entry -> entry.getValue().getAsString().equals(code))
                 .map(Map.Entry::getKey).findFirst().orElseThrow(() -> new IOException("Training Olinfo non accetta questo linguaggio per il problema."));
         return new Options(names.get(0).getAsString(), compiler);
+    }
+
+    private static CharSequence flightData(Document document) throws IOException {
+        var data = new StringBuilder();
+        for (var script : document.select("script")) {
+            String content = script.data();
+            int cursor = 0;
+            int push;
+            // Next.js embeds translation catalogs in these strings. Scan them without recursive regex matches.
+            while ((push = content.indexOf(FLIGHT_PUSH, cursor)) >= 0) {
+                int start = push + FLIGHT_PUSH.length();
+                cursor = start;
+                if (cursor == content.length() || content.charAt(cursor) != '"') continue;
+                cursor++;
+                while (cursor < content.length()) {
+                    char next = content.charAt(cursor++);
+                    if (next == '\\') {
+                        cursor++;
+                    } else if (next == '"') {
+                        if (content.startsWith("])", cursor)) {
+                            try {
+                                data.append(GSON.fromJson(content.substring(start, cursor), String.class));
+                            } catch (com.google.gson.JsonParseException exception) {
+                                throw new IOException("Impossibile leggere il modulo di invio aggiornato di Training Olinfo.", exception);
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        return data;
     }
 
     static Results submissionList(String html, String task) throws IOException {

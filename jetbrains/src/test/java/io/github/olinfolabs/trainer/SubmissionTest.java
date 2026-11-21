@@ -1,5 +1,6 @@
 package io.github.olinfolabs.trainer;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -58,7 +59,8 @@ class SubmissionTest {
 
     @Test
     void signsInSubmitsAndParsesEvaluation() throws IOException {
-        String form = fixture("submit.html");
+        String catalog = new Gson().toJson("Traduzione \"test\" con slash \\ e a capo\n".repeat(1_600));
+        String form = fixture("submit.html").replace("<script>", "<script>self.__next_f.push([1," + catalog + "]);");
         String history = fixture("submissions.html");
         String action = "a".repeat(42);
         var uploads = new AtomicInteger();

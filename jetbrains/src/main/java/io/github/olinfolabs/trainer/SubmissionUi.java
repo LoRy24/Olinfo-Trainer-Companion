@@ -347,8 +347,7 @@ public final class SubmissionUi implements Disposable {
             }
 
             @Override public void onSuccess() {
-                working = false;
-                submitting = false;
+                clearProgress();
                 if (disposed) return;
                 if (error == null) success.accept(result);
                 else {
@@ -363,9 +362,23 @@ public final class SubmissionUi implements Disposable {
             }
 
             @Override public void onCancel() {
+                clearProgress();
+                if (!disposed) notifyViews();
+            }
+
+            @Override public void onThrowable(@NotNull Throwable failure) {
+                clearProgress();
+                if (!disposed) {
+                    notifyViews();
+                    Messages.showErrorDialog(project, "Operazione interrotta (" + failure.getClass().getSimpleName()
+                            + "). I dettagli sono nel log dell’IDE.", "Olinfo Trainer");
+                }
+                super.onThrowable(failure);
+            }
+
+            private void clearProgress() {
                 working = false;
                 submitting = false;
-                if (!disposed) notifyViews();
             }
         }.queue();
     }
