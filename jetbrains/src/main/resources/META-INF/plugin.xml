@@ -11,6 +11,7 @@
     <depends optional="true" config-file="olinfo-idea.xml">com.intellij.modules.java</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Olinfo Trainer" displayType="BALLOON"/>
         <statusBarWidgetFactory id="OlinfoTrainer.Score" implementation="io.github.olinfolabs.trainer.OlinfoScoreWidget"/>
         <directoryProjectGenerator implementation="io.github.olinfolabs.trainer.OlinfoDirectoryProjectGenerator"/>
         <toolWindow id="Olinfo Trainer" anchor="right"

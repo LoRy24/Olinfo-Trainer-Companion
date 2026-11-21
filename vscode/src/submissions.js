@@ -28,7 +28,19 @@ function registerSubmissions(context, onChange, openAccount) {
   let cachedSession;
   let accountBusy = false;
   let problemMeta;
-  const publish = () => onChange({ problem: current, account });
+  let tooltipText;
+  const publish = () => {
+    if (tooltipText && account?.avatar) {
+      const tooltip = new vscode.MarkdownString();
+      const avatar = account.avatar.replaceAll('|', '%7C').replaceAll('>', '%3E').replaceAll('<', '%3C');
+      tooltip.appendMarkdown('![Foto profilo](<' + avatar + '|width=32,height=32>) ');
+      tooltip.appendText('@' + account.username + '\n\n' + tooltipText);
+      item.tooltip = tooltip;
+    } else {
+      item.tooltip = tooltipText;
+    }
+    onChange({ problem: current, account });
+  };
 
   async function refreshAccount(force = false) {
     if (accountBusy || (!force && (!accountVisible || Date.now() < nextAccount))) return;
@@ -42,9 +54,11 @@ function registerSubmissions(context, onChange, openAccount) {
       const details = await api.profile(username);
       if (id !== accountRequest) return;
       cachedSession = session;
-      const updateRank = !previous || previous.points !== details.points || Date.now() >= (previous.rankUntil || 0);
-      account = { username, ...details, rank: updateRank ? undefined : previous.rank,
-        rankUntil: updateRank ? Date.now() + 180_000 : previous.rankUntil, ranking: updateRank && details.points > 0 };
+      const pointsChanged = !previous || previous.points !== details.points;
+      const rankUntil = pointsChanged ? 0 : previous.rankUntil;
+      const updateRank = accountVisible && Date.now() >= rankUntil;
+      account = { username, ...details, rank: pointsChanged || updateRank ? undefined : previous.rank,
+        rankUntil: updateRank ? Date.now() + 180_000 : rankUntil, ranking: updateRank && details.points > 0 };
       publish();
       if (updateRank && details.points > 0) {
         const rank = await api.rank(username, details.points).catch(() => undefined);
@@ -85,6 +99,7 @@ function registerSubmissions(context, onChange, openAccount) {
       const link = await project();
       if (id !== refreshId) return;
       if (!link) {
+        tooltipText = undefined;
         item.hide();
         setProblem(undefined);
         return;
@@ -96,7 +111,7 @@ function registerSubmissions(context, onChange, openAccount) {
       }
       problem = { ...problemMeta, language: link.language, source: link.source };
       item.name = 'Punteggio Olinfo';
-      item.tooltip = link.task + ' · Comandi Olinfo';
+      tooltipText = link.task + ' · Apri account Olinfo';
       const session = await context.secrets.get(key);
       if (id !== refreshId) return;
       if (!session) {
@@ -110,6 +125,7 @@ function registerSubmissions(context, onChange, openAccount) {
       const result = await api.results(link.task, session);
       if (id !== refreshId) return;
       needsLogin = false;
+      if (session !== cachedSession && Date.now() >= nextAccount) void refreshAccount(true);
       const previous = monitored.get(link.root);
       const tracked = previous && result.rows.find(row => row.id === previous.id);
       const expired = previous && Date.now() >= previous.until;
@@ -124,21 +140,29 @@ function registerSubmissions(context, onChange, openAccount) {
       } else if (expired && !tracked) {
         monitored.delete(link.root);
       }
-      const best = result.best === undefined ? '—' : result.best + ' pt';
-      const color = result.rows.find(row => row.score !== undefined && row.score === result.best)?.color ?? scoreColor(result.best);
-      item.text = (waiting ? '$(sync~spin)' : '$(circle-filled)') + ' Olinfo ' + best;
+      const best = result.rows.length === 0 ? '0 su 0' : result.best === undefined ? '—' : result.best + ' pt';
+      const color = result.rows.length === 0 && !waiting ? 'red'
+        : result.rows.find(row => row.score !== undefined && row.score === result.best)?.color ?? scoreColor(result.best);
+      item.text = (waiting ? '$(sync~spin)' : '$(circle-filled)') + ' $(account) Olinfo ' + best;
       item.color = palette[color];
-      item.tooltip = link.task + ' · Miglior punteggio: ' + best
+      tooltipText = link.task + ' · Miglior punteggio: ' + best
         + (submission ? '\nUltimo invio #' + submission.id + ' · ' + submission.outcome : '');
       item.show();
       const rows = result.rows.slice(0, 20).map(row => ({ ...row, color: row.color ?? scoreColor(row.score) }));
-      setProblem({ ...problem, color, best: result.best, waiting: !!waiting, rows });
+      setProblem({ ...problem, color, best, waiting: !!waiting, rows });
     } catch (error) {
       if (id !== refreshId) return;
-      if (error instanceof LoginRequired) needsLogin = true;
+      if (error instanceof LoginRequired) {
+        needsLogin = true;
+        if (account?.username) {
+          account = { signedOut: true, error: errorMessage(error) };
+          cachedSession = undefined;
+          ++accountRequest;
+        }
+      }
       item.text = error instanceof LoginRequired ? '$(sign-in) Olinfo' : '$(warning) Olinfo';
       item.color = undefined;
-      item.tooltip = errorMessage(error);
+      tooltipText = errorMessage(error);
       item.show();
       setProblem(problem && { ...problem, signedOut: error instanceof LoginRequired, error: errorMessage(error) });
     }

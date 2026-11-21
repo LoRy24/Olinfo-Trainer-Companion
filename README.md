@@ -52,6 +52,8 @@ La creazione usa una cartella nuova e protegge i file esistenti. L’importazion
 
 Il badge in basso apre la scheda **Account Olinfo** con username, foto, punti totali, problemi risolti e posizione nella classifica pubblica. La scheda aggiorna i punti periodicamente finché rimane aperta e quando termina un invio monitorato.
 
+Quando lo storico è vuoto, il badge mostra **0 su 0**. Su JetBrains la foto profilo compare accanto a **Olinfo**. Su VS Code il badge mostra l’icona account e la foto è disponibile nel fumetto al passaggio del mouse e nel pannello account.
+
 Il flusso nell’IDE supporta i problemi CMS con un sorgente singolo. Per problemi di solo output o che richiedono più file, usa il modulo sul sito. **Esci** rimuove la sessione locale dell’IDE.
 
 Per collegare una cartella creata con una versione precedente, aggiungi un `olinfo.xml` alla radice e usa l’identificativo dal sito, il linguaggio (`cpp`, `c`, `py`, `java` o `pas`) e il nome effettivo del sorgente.

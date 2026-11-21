@@ -4,6 +4,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.CustomStatusBarWidget;
 import com.intellij.openapi.wm.StatusBarWidget;
 import com.intellij.openapi.wm.StatusBarWidgetFactory;
+import com.intellij.ui.RowIcon;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.NotNull;
@@ -38,7 +39,17 @@ public final class OlinfoScoreWidget implements StatusBarWidgetFactory {
                 var state = ui.snapshot();
                 badge.setText(state.text());
                 badge.setToolTipText(state.tooltip());
-                badge.setIcon(OlinfoDashboard.dot(state.color()));
+                var account = ui.account();
+                var avatar = account == null ? null : OlinfoDashboard.avatar(account.photo(), 16);
+                var dot = OlinfoDashboard.dot(state.color());
+                if (avatar != null && dot != null) {
+                    var icons = new RowIcon(2);
+                    icons.setIcon(dot, 0);
+                    icons.setIcon(avatar, 1);
+                    badge.setIcon(icons);
+                } else {
+                    badge.setIcon(avatar == null ? dot : avatar);
+                }
                 badge.setVisible(!state.text().isEmpty());
             });
         }

@@ -31,7 +31,7 @@ function renderDashboard({ account, problem }) {
     ? [problem.task, problem.language?.toUpperCase(), problem.source, problem.mode].filter(Boolean).join(' · ')
     : 'Apri una cartella con olinfo.xml.';
   ui['current-score'].hidden = !problem?.rows;
-  ui['current-score'].textContent = problem?.best === undefined ? 'Migliore · —' : 'Migliore · ' + format(problem.best) + ' pt';
+  ui['current-score'].textContent = 'Migliore · ' + (problem?.best ?? '—');
   ui['current-score'].dataset.color = safeColor(problem?.color);
   ui['current-open'].disabled = !problem?.task;
   ui['current-submit'].disabled = !problem?.source;

@@ -6,6 +6,18 @@ const origin = 'https://training.olinfo.it';
 const sessionCookie = /^(?:__Secure-)?better-auth\.session_token=[A-Za-z0-9._%+~\/=-]+$/;
 const actionReference = /createServerReference[^\w"]{0,12}"([a-f0-9]{40,64})"[^;]{0,180}?"loginPassword"/;
 const maxBytes = 4 * 1024 * 1024;
+// Training returns compiled Lingui descriptors with an id and no message.
+const submissionErrors = {
+  '0RqsvY': 'Hai inviato troppe soluzioni. Riprova tra un minuto.',
+  '9EnL6q': 'Training Olinfo richiede un linguaggio per questo problema.',
+  GZ0ShV: 'Training Olinfo non è riuscito a registrare l’invio.',
+  M9KQCp: 'Training Olinfo non accetta questo linguaggio per il problema.',
+  'ZO9-51': 'Training Olinfo non ha trovato il problema.',
+  Zw8V2_: 'Training Olinfo non autorizza l’invio con questo account. Controlla la registrazione sul sito.',
+  b6ffpb: 'Training Olinfo non è riuscito a salvare il sorgente.',
+  v16cFz: 'Il file supera il limite di Training Olinfo.',
+  'x-JU4k': 'Training Olinfo non ha ricevuto il sorgente richiesto.',
+};
 
 class LoginRequired extends Error {
   constructor() { super('Accedi a Training Olinfo per continuare.'); }
@@ -38,10 +50,10 @@ function submitOptions(html, language) {
   const document = load(html);
   document('script').remove();
   if (/Accedi per inviare soluzioni/i.test(document.root().text())) throw new LoginRequired();
-  const files = data.match(/"submissionFormat":(\[[^\]]*\])/);
-  const languages = data.match(/"languages":(\{[^{}]*\})/);
+  const files = data.match(/"submissionFormat"\s*:\s*(\[[^\]]*\])/);
+  const languages = data.match(/"languages"\s*:\s*(\{[^{}]*\})/);
   if (!files || !languages) throw new Error('Il modulo di invio non è disponibile sul sito per questo problema.');
-  if (!data.includes('"guidelinesAccepted":true')) {
+  if (!/"guidelinesAccepted"\s*:\s*true\b/.test(data)) {
     throw new Error('Accetta le linee guida su training.olinfo.it/guidelines prima del primo invio.');
   }
   const fields = JSON.parse(files[1]);
@@ -166,20 +178,31 @@ class SubmissionClient {
 
   async submit(link, source, session) {
     if (!session) throw new LoginRequired();
-    const options = submitOptions(await this.page(pathFor(link.task, 'submit'), session), link.language);
+    const formPath = pathFor(link.task, 'submit');
+    const options = submitOptions(await this.page(formPath, session), link.language);
     const body = new FormData();
     body.append(options.field, new Blob([source], { type: 'application/octet-stream' }), link.source);
     const query = new URLSearchParams({ task: link.task, language: options.compiler });
-    let data;
+    let result;
     try {
-      const { response, text } = await this.exchange('/files/submit?' + query, { session, body });
-      if (!response.ok) throw new Error();
-      data = JSON.parse(text);
+      result = await this.exchange('/files/submit?' + query, {
+        session, body, headers: { Accept: 'application/json', Referer: origin + formPath },
+      });
     } catch {
       throw new Error('Esito dell’invio incerto. Controlla gli invii sul sito prima di riprovare.');
     }
-    if (Number.isSafeInteger(data.submissionId) && data.submissionId > 0) return String(data.submissionId);
-    if (typeof data.error?.message === 'string') throw new Error(data.error.message.slice(0, 200));
+    const { response, text } = result;
+    if (response.status === 401 || (response.status >= 300 && response.status < 400
+        && /^\/login(?:[?/]|$)/.test(response.headers.get('location') ?? ''))) throw new LoginRequired();
+    let data;
+    try { data = JSON.parse(text); } catch { /* Some gateways return an HTML error page. */ }
+    if (data?.error?.id === 'RAHXa3') throw new LoginRequired();
+    if (typeof data?.error?.id === 'string' && Object.hasOwn(submissionErrors, data.error.id)) {
+      throw new Error(submissionErrors[data.error.id]);
+    }
+    if (response.ok && Number.isSafeInteger(data?.submissionId) && data.submissionId > 0) return String(data.submissionId);
+    if (typeof data?.error?.message === 'string') throw new Error(data.error.message.slice(0, 200));
+    if (!response.ok) throw new Error('Training Olinfo ha risposto con HTTP ' + response.status + '. Controlla gli invii prima di riprovare.');
     throw new Error('Training Olinfo ha rifiutato l’invio. Controlla account e limiti sul sito.');
   }
 }

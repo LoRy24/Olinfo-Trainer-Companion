@@ -73,6 +73,7 @@ test('accesso, multipart e valutazione rispettano il protocollo di Training', as
     if (url.pathname.endsWith('/submit') && options.method === 'GET') return new Response(form);
     if (url.pathname.endsWith('/submissions')) return new Response(history);
     assert.equal(url.pathname, '/files/submit');
+    assert.equal(options.headers.Referer, 'https://training.olinfo.it/task/demo/submit');
     assert.equal(url.searchParams.get('language'), 'C++20');
     assert.equal(url.searchParams.get('task'), 'demo');
     const source = options.body.get('demo.%l');
@@ -99,4 +100,28 @@ test('riconosce sessione scaduta, linee guida e invii vuoti', async () => {
   assert.equal(submissionList('<div>Nessuna sottoposizione inviata</div>', 'demo').best, undefined);
   const form = await fixture('submit.html');
   assert.throws(() => submitOptions(form.replace('Accepted\\":true', 'Accepted\\":false'), 'cpp'), /linee guida/);
+});
+
+test('distingue una sessione scaduta dai rifiuti di Training durante il POST', async () => {
+  const form = await fixture('submit.html');
+  const link = { task: 'demo', language: 'cpp', source: 'demo.cpp' };
+  const source = Buffer.from('int main() {}');
+  const errors = [
+    [new Response(null, { status: 401 }), LoginRequired],
+    [Response.json({ error: { id: 'RAHXa3' } }), LoginRequired],
+    [Response.json({ error: { id: 'Zw8V2_' } }), /non autorizza/],
+    [Response.json({ error: { id: 'x-JU4k' } }, { status: 400 }), /sorgente richiesto/],
+    [new Response('<html>Proxy</html>', { status: 502 }), /HTTP 502/],
+  ];
+  for (const [response, error] of errors) {
+    let sent = 0;
+    const client = new SubmissionClient(async (url, request) => {
+      if (request.method === 'GET') return new Response(form);
+      assert.equal(url.pathname, '/files/submit');
+      sent++;
+      return response;
+    });
+    await assert.rejects(client.submit(link, source, cookie), error);
+    assert.equal(sent, 1);
+  }
 });

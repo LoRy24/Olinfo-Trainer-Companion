@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SubmissionTest {
+    private static final String COOKIE = "__Secure-better-auth.session_token=mock-token.test%2Bsignature";
     @TempDir Path root;
 
     @Test
@@ -60,7 +61,6 @@ class SubmissionTest {
         String form = fixture("submit.html");
         String history = fixture("submissions.html");
         String action = "a".repeat(42);
-        String cookie = "__Secure-better-auth.session_token=mock-token.test%2Bsignature";
         var uploads = new AtomicInteger();
         var client = new SubmissionClient((location, session, headers, body) -> {
             if (location.equals("/login") && body == null) return ok("<script src=\"/_next/static/chunks/login.js\"></script>");
@@ -72,12 +72,13 @@ class SubmissionTest {
                 var arguments = JsonParser.parseString(new String(body, StandardCharsets.UTF_8)).getAsJsonArray();
                 assertEquals("demo", arguments.get(0).getAsString());
                 assertEquals("$$mock-password", arguments.get(1).getAsString());
-                return new SubmissionClient.Response(200, Map.of("set-cookie", List.of(cookie + "; HttpOnly; Secure")), "");
+                return new SubmissionClient.Response(200, Map.of("set-cookie", List.of(COOKIE + "; HttpOnly; Secure")), "");
             }
-            assertEquals(cookie, session);
+            assertEquals(COOKIE, session);
             if (location.equals("/task/demo/submit")) return ok(form);
             if (location.equals("/task/demo/submissions")) return ok(history);
             assertEquals("/files/submit?task=demo&language=C%2B%2B20", location);
+            assertEquals("https://training.olinfo.it/task/demo/submit", headers.get("Referer"));
             String multipart = new String(body, StandardCharsets.UTF_8);
             assertTrue(multipart.contains("name=\"demo.%l\"; filename=\"demo.cpp\""));
             assertTrue(multipart.contains("\r\n\r\nint main() {}"));
@@ -86,7 +87,7 @@ class SubmissionTest {
         });
 
         String session = client.login("demo", "$mock-password");
-        assertEquals(cookie, session);
+        assertEquals(COOKIE, session);
         assertThrows(SubmissionClient.LoginRequired.class, () -> client.results("demo", null));
         String id = client.submit(new ProjectLink(root, "demo", "cpp", "demo.cpp"), "int main() {}".getBytes(StandardCharsets.UTF_8), session);
         var result = client.results("demo", session);
@@ -104,8 +105,34 @@ class SubmissionTest {
         assertThrows(SubmissionClient.LoginRequired.class, () ->
                 SubmissionClient.submissionList("<div>Accedi per vedere le tue sottoposizioni</div>", "demo"));
         assertNull(SubmissionClient.submissionList("<div>Nessuna sottoposizione inviata</div>", "demo").best());
+        assertEquals("0 su 0", SubmissionClient.submissionList("<div>Nessuna sottoposizione inviata</div>", "demo").scoreLabel());
         String form = fixture("submit.html").replace("Accepted\\\":true", "Accepted\\\":false");
         assertTrue(assertThrows(IOException.class, () -> SubmissionClient.submitOptions(form, "cpp")).getMessage().contains("linee guida"));
+    }
+
+    @Test
+    void handlesExpiredSessionAndSiteErrorsWithoutResubmitting() throws IOException {
+        String form = fixture("submit.html");
+        var link = new ProjectLink(root, "demo", "cpp", "demo.cpp");
+        byte[] source = "int main() {}".getBytes(StandardCharsets.UTF_8);
+        var uploads = new AtomicInteger();
+        var replies = List.of(
+                new SubmissionClient.Response(401, Map.of(), ""),
+                ok("{\"error\":{\"id\":\"RAHXa3\"}}"),
+                ok("{\"error\":{\"id\":\"Zw8V2_\"}}"),
+                new SubmissionClient.Response(400, Map.of(), "{\"error\":{\"id\":\"x-JU4k\"}}"),
+                new SubmissionClient.Response(502, Map.of(), "<html>Proxy</html>"));
+        var client = new SubmissionClient((location, session, headers, body) -> {
+            if (body == null) return ok(form);
+            assertTrue(location.startsWith("/files/submit?"));
+            return replies.get(uploads.getAndIncrement());
+        });
+        assertThrows(SubmissionClient.LoginRequired.class, () -> client.submit(link, source, COOKIE));
+        assertThrows(SubmissionClient.LoginRequired.class, () -> client.submit(link, source, COOKIE));
+        assertTrue(assertThrows(IOException.class, () -> client.submit(link, source, COOKIE)).getMessage().contains("non autorizza"));
+        assertTrue(assertThrows(IOException.class, () -> client.submit(link, source, COOKIE)).getMessage().contains("sorgente richiesto"));
+        assertTrue(assertThrows(IOException.class, () -> client.submit(link, source, COOKIE)).getMessage().contains("HTTP 502"));
+        assertEquals(5, uploads.get());
     }
 
     private static SubmissionClient.Response ok(String text) {

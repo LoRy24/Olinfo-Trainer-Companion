@@ -4,6 +4,8 @@ import com.intellij.credentialStore.CredentialAttributes;
 import com.intellij.ide.BrowserUtil;
 import com.intellij.ide.impl.TrustedProjects;
 import com.intellij.ide.passwordSafe.PasswordSafe;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
@@ -55,6 +57,8 @@ public final class SubmissionUi implements Disposable {
     private volatile long accountGeneration;
     private volatile boolean accountVisible;
     private volatile Pending pending;
+    private volatile boolean needsLogin;
+    private boolean submitting;
     private volatile long nextRefresh;
     private volatile boolean disposed;
     private boolean working;
@@ -71,6 +75,11 @@ public final class SubmissionUi implements Disposable {
     Snapshot snapshot() { return snapshot; }
     Problem problem() { return problem; }
     Account account() { return account; }
+    boolean submitting() { return submitting; }
+    String pendingId() {
+        var tracked = pending;
+        return tracked == null ? null : tracked.id();
+    }
 
     void listen(Disposable lifetime, Runnable listener) {
         listeners.add(listener);
@@ -113,6 +122,8 @@ public final class SubmissionUi implements Disposable {
                 }
                 String session = PasswordSafe.getInstance().getPassword(SESSION);
                 var result = api.results(link.task(), session);
+                needsLogin = false;
+                if (!session.equals(accountSession) && System.currentTimeMillis() >= nextAccount) refreshAccount();
                 Pending tracking = pending;
                 boolean same = tracking != null && tracking.task().equals(link.task()) && tracking.session().equals(session);
                 var latest = same ? result.rows().stream().filter(row -> row.id().equals(tracking.id())).findFirst().orElse(null)
@@ -125,15 +136,17 @@ public final class SubmissionUi implements Disposable {
                     pending = null;
                     if (accountVisible) refreshAccount();
                 } else if (same && latest == null && !waiting) pending = null;
-                String best = result.best() == null ? "—" : result.best() + " pt";
+                String best = result.scoreLabel();
                 String tooltip = link.task() + " · Miglior punteggio: " + best
                         + (latest == null ? "" : " · Ultimo invio #" + latest.id() + " · " + latest.outcome());
-                String color = result.best() == null ? "" : result.rows().stream()
+                String color = result.rows().isEmpty() && !waiting ? "red" : result.best() == null ? "" : result.rows().stream()
                         .filter(row -> result.best().equals(row.score()))
                         .findFirst().map(row -> AccountData.scoreColor(row.score(), row.color())).orElse("");
                 problem = new Problem(link, title, mode, result, waiting, false, null);
                 publish(new Snapshot("Olinfo " + best + (waiting ? " · in corso" : ""), tooltip, color));
             } catch (SubmissionClient.LoginRequired exception) {
+                needsLogin = true;
+                if (accountSession != null) clearAccount();
                 if (link != null) problem = new Problem(link, title, mode, null, false, true, null);
                 publish(new Snapshot("Olinfo · Accedi", exception.getMessage(), ""));
             } catch (Exception exception) {
@@ -176,11 +189,13 @@ public final class SubmissionUi implements Disposable {
                 boolean samePhoto = previous != null && previous.profile() != null
                         && java.util.Objects.equals(previous.profile().avatar(), metrics.avatar());
                 var photo = samePhoto ? previous.photo() : AccountData.photo(metrics.avatar());
-                boolean updateRank = previous == null || previous.profile() == null
-                        || previous.profile().points() != metrics.points() || System.currentTimeMillis() >= rankUntil;
+                boolean pointsChanged = previous == null || previous.profile() == null
+                        || previous.profile().points() != metrics.points();
+                if (pointsChanged) rankUntil = 0;
+                boolean updateRank = accountVisible && (pointsChanged || System.currentTimeMillis() >= rankUntil);
                 if (generation != accountGeneration || disposed) return;
                 accountSession = session;
-                account = new Account(username, metrics, photo, updateRank ? null : previous.rank(),
+                account = new Account(username, metrics, photo, updateRank || pointsChanged ? null : previous.rank(),
                         updateRank && metrics.points() > 0, false, null);
                 notifyViews();
                 if (updateRank && metrics.points() > 0) {
@@ -206,12 +221,16 @@ public final class SubmissionUi implements Disposable {
         });
     }
 
-    private void resetAccount() {
+    private void clearAccount() {
         ++accountGeneration;
         account = null;
         accountSession = null;
         rankUntil = 0;
         nextAccount = 0;
+    }
+
+    private void resetAccount() {
+        clearAccount();
         if (accountVisible) refreshAccount();
         notifyViews();
     }
@@ -230,6 +249,7 @@ public final class SubmissionUi implements Disposable {
             return session;
         }, session -> {
             pending = null;
+            needsLogin = false;
             resetAccount();
             continuation.accept(session);
         });
@@ -258,7 +278,7 @@ public final class SubmissionUi implements Disposable {
             return;
         }
         run("Controllo sessione Olinfo", () -> PasswordSafe.getInstance().getPassword(SESSION), session -> {
-            if (session == null) promptLogin(value -> confirmAndSend(link, value));
+            if (session == null || needsLogin) promptLogin(value -> confirmAndSend(link, value));
             else confirmAndSend(link, session);
         });
     }
@@ -278,8 +298,13 @@ public final class SubmissionUi implements Disposable {
                 }
             }
         }
+        submitting = true;
+        notifyViews();
         run("Invio della soluzione a Olinfo", () -> api.submit(link, link.readSource(), session), id -> {
             pending = new Pending(link.task(), id, session, System.currentTimeMillis() + 120_000);
+            NotificationGroupManager.getInstance().getNotificationGroup("Olinfo Trainer")
+                    .createNotification("Training Olinfo ha ricevuto l’invio #" + id + ".", NotificationType.INFORMATION)
+                    .notify(project);
             refresh(true);
         });
     }
@@ -323,12 +348,24 @@ public final class SubmissionUi implements Disposable {
 
             @Override public void onSuccess() {
                 working = false;
+                submitting = false;
                 if (disposed) return;
                 if (error == null) success.accept(result);
                 else {
-                    if (error instanceof SubmissionClient.LoginRequired) refresh(true);
+                    if (error instanceof SubmissionClient.LoginRequired) {
+                        needsLogin = true;
+                        clearAccount();
+                        refresh(true);
+                    }
                     showError(error);
                 }
+                notifyViews();
+            }
+
+            @Override public void onCancel() {
+                working = false;
+                submitting = false;
+                if (!disposed) notifyViews();
             }
         }.queue();
     }

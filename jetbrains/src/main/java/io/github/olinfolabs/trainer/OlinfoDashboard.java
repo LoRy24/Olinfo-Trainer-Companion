@@ -47,6 +47,10 @@ final class OlinfoDashboard {
         return color == null ? null : new Circle(color, null, JBUI.scale(8));
     }
 
+    static Icon avatar(BufferedImage photo, int size) {
+        return photo == null ? null : new Circle(JBColor.GRAY, photo, JBUI.scale(size));
+    }
+
     private record Circle(Color color, BufferedImage picture, int size) implements Icon {
         @Override public int getIconWidth() { return size; }
         @Override public int getIconHeight() { return size; }
@@ -140,7 +144,7 @@ final class OlinfoDashboard {
                     avatar.setText(account.user().substring(0, 2).toUpperCase(Locale.ROOT));
                 } else {
                     avatar.setText("");
-                    avatar.setIcon(new Circle(JBColor.GRAY, account.photo(), JBUI.scale(42)));
+                    avatar.setIcon(avatar(account.photo(), 42));
                 }
                 points.setText(number(account.profile().points()));
                 solved.setText(number(account.profile().solved()));
@@ -231,6 +235,15 @@ final class OlinfoDashboard {
 
         void render() {
             var problem = ui.problem();
+            var results = problem == null ? null : problem.results();
+            var pending = ui.pendingId();
+            boolean submitting = ui.submitting();
+            submit.setEnabled(!submitting && problem != null && problem.link().source() != null);
+            status.setText(submitting ? "Invio in corso…"
+                    : pending != null ? "Invio #" + pending + " ricevuto. Attendo la valutazione…"
+                    : problem == null ? "" : problem.message() != null ? problem.message()
+                    : problem.waiting() ? "Valutazione in corso…" : problem.signedOut() ? "Accedi per vedere i tuoi invii."
+                    : results != null && results.rows().isEmpty() ? "Nessun invio." : "");
             if (problem == rendered && problem != null) return;
             var selected = submissions.getSelectedValue();
             boolean sameTask = rendered != null && problem != null && rendered.link().task().equals(problem.link().task());
@@ -241,17 +254,12 @@ final class OlinfoDashboard {
                     : problem.link().task() + " · " + problem.link().language()
                     + (problem.link().source() == null ? "" : " · " + problem.link().source())
                     + (problem.mode() == null || problem.mode().isBlank() ? "" : " · " + problem.mode()));
-            var results = problem == null ? null : problem.results();
-            best.setText(results == null ? "" : "Migliore · " + (results.best() == null ? "—" : number(results.best()) + " pt"));
+            best.setText(results == null ? "" : "Migliore · " + results.scoreLabel());
             best.setIcon(results == null ? null : dot(ui.snapshot().color()));
             login.setVisible(problem != null && problem.signedOut());
-            submit.setEnabled(problem != null && problem.link().source() != null);
             open.setEnabled(problem != null);
             history.setEnabled(problem != null);
             showSubmission.setEnabled(false);
-            status.setText(problem == null ? "" : problem.message() != null ? problem.message()
-                    : problem.waiting() ? "Valutazione in corso…" : problem.signedOut() ? "Accedi per vedere i tuoi invii."
-                    : results != null && results.rows().isEmpty() ? "Nessun invio." : "");
             if (results != null) {
                 rows.addAll(results.rows().stream().limit(20).toList());
                 if (sameTask && selected != null) {
