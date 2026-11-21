@@ -1,0 +1,106 @@
+name: Build and release plugins
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vscode:
+    name: Visual Studio Code
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vscode
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: olinfo-trainer-vscode
+          path: vscode/*.vsix
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [vscode, jetbrains]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: olinfo-trainer-*
+          path: release
+          merge-multiple: true
+      - run: python3 scripts/release-index.py release
+      - name: Publish packages and JetBrains update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          assets=(release/*.vsix release/*.zip release/updatePlugins.xml)
+          if draft=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft); then
+            if [[ "$draft" == true ]]; then
+              gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+              gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+            fi
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" --verify-tag --generate-notes --latest
+          fi
+
+  vscode-marketplace:
+    name: Visual Studio Marketplace
+    if: vars.PUBLISH_VSCODE_MARKETPLACE == 'true'
+    needs: release
+    runs-on: ubuntu-latest
+    environment: vscode-marketplace
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: vscode
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: olinfo-trainer-vscode
+          path: vscode/release
+      - run: npm ci
+      - run: npx --no-install vsce publish --oidc --packagePath release/*.vsix
+
+  jetbrains:
+    name: IntelliJ Platform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: bash ./gradlew :jetbrains:test :jetbrains:verifyPluginProjectConfiguration :jetbrains:buildPlugin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: olinfo-trainer-jetbrains
+          path: jetbrains/build/distributions/*.zip
+          if-no-files-found: error

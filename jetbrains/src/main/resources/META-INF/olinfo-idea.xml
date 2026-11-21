@@ -1,0 +1,5 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <newProjectWizard.generator implementation="io.github.olinfolabs.trainer.OlinfoIdeaProjectWizard"/>
+    </extensions>
+</idea-plugin>

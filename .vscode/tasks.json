@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build dell’estensione Olinfo",
+      "type": "npm",
+      "script": "build",
+      "path": "vscode/",
+      "problemMatcher": []
+    }
+  ]
+}

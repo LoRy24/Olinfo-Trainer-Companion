@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src {{csp}}; style-src {{csp}}; script-src {{csp}};">
+  <link rel="stylesheet" href="{{stylesheet}}">
+  <script defer src="{{script}}"></script>
+  <title>Nuovo problema Olinfo</title>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="{{icon}}" width="44" height="44" alt="">
+      <h1>Nuovo problema Olinfo</h1>
+    </header>
+
+    <section aria-labelledby="catalog-title">
+      <h2 id="catalog-title">Catalogo</h2>
+      <form id="search" class="inline">
+        <label for="query" class="sr-only">Titolo o identificativo del problema</label>
+        <input id="query" type="search" placeholder="Titolo o identificativo" maxlength="200">
+        <button type="submit">Cerca</button>
+      </form>
+      <label for="results" class="sr-only">Problemi trovati</label>
+      <select id="results" size="7"></select>
+      <div class="pagination">
+        <button type="button" class="secondary" id="previous" disabled>Indietro</button>
+        <span id="search-status" role="status"></span>
+        <button type="button" class="secondary" id="next" disabled>Avanti</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="project-title">
+      <h2 id="project-title">Progetto</h2>
+      <p id="task-status" role="status">Seleziona un problema dal catalogo.</p>
+      <div class="choices">
+        <label>Lingua del PDF <select id="locale" disabled></select></label>
+        <label>Linguaggio <select id="language" disabled></select></label>
+      </div>
+      <p id="grader-status" role="status" hidden></p>
+      <form id="project">
+        <label for="project-name">Nome progetto</label>
+        <input id="project-name" required maxlength="100" autocomplete="off">
+        <label for="parent">Cartella di destinazione</label>
+        <div class="inline">
+          <input id="parent" required autocomplete="off">
+          <button class="secondary" type="button" id="browse">Sfoglia…</button>
+        </div>
+        <div class="actions">
+          <button type="submit" id="create" disabled>Crea progetto</button>
+          <button type="button" class="secondary" id="open" hidden>Apri cartella</button>
+        </div>
+      </form>
+      <p id="create-status" role="status"></p>
+    </section>
+  </main>
+</body>
+</html>

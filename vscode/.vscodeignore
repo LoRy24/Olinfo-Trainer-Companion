@@ -1,0 +1,9 @@
+**
+!package.json
+!README.md
+!LICENSE
+!media/**
+!dist/extension.js
+!dist/extension.js.LEGAL.txt
+!dist/THIRD_PARTY_NOTICES.txt
+!dist/oii/**

@@ -1,0 +1,56 @@
+{
+  "name": "olinfo-trainer-companion",
+  "displayName": "Olinfo Trainer Companion",
+  "description": "Crea progetti locali a partire dai problemi di training.olinfo.it.",
+  "version": "0.2.0",
+  "publisher": "olinfo-trainer-companion",
+  "repository": { "type": "git", "url": "https://github.com/LoRy24/Olinfo-Trainer-Companion.git" },
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "olinfo",
+    "oii",
+    "competitive programming"
+  ],
+  "icon": "media/icon.png",
+  "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": false,
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "olinfoTrainer.newProblem",
+        "title": "Nuovo problema",
+        "category": "Olinfo Trainer"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "test": "node --test",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "cheerio": "1.0.0",
+    "fflate": "0.8.3"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "4.1.1",
+    "esbuild": "0.25.12"
+  }
+}

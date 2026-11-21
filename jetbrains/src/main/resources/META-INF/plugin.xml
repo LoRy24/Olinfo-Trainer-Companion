@@ -1,0 +1,27 @@
+<idea-plugin>
+    <id>io.github.olinfolabs.trainer-companion</id>
+    <name>Olinfo Trainer Companion</name>
+    <vendor url="https://github.com/LoRy24/Olinfo-Trainer-Companion">Olinfo Trainer Companion Contributors</vendor>
+    <description><![CDATA[
+        Cerca un problema di training.olinfo.it e crea una cartella di lavoro con
+        i sorgenti, gli allegati disponibili e il PDF nella lingua scelta.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends optional="true" config-file="olinfo-idea.xml">com.intellij.modules.java</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <directoryProjectGenerator implementation="io.github.olinfolabs.trainer.OlinfoDirectoryProjectGenerator"/>
+        <toolWindow id="Olinfo Trainer" anchor="right"
+                    icon="/icons/toolWindow.svg"
+                    factoryClass="io.github.olinfolabs.trainer.OlinfoToolWindow"/>
+    </extensions>
+
+    <actions>
+        <action id="OlinfoTrainer.NewProblem" text="Olinfo Trainer: Nuovo problema"
+                description="Apri la scheda di creazione dei problemi Olinfo"
+                class="io.github.olinfolabs.trainer.OpenTrainerAction">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>
