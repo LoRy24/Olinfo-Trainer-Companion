@@ -30,7 +30,7 @@ https://github.com/LoRy24/Olinfo-Trainer-Companion/releases/latest/download/upda
 
 Apri **Olinfo Trainer → Nuovo problema**, cerca per nome o identificativo e scegli lingua del PDF, linguaggio e destinazione. Il progetto contiene il PDF, `input.txt`, `output.txt`, `olinfo.xml`, il sorgente e gli eventuali allegati pubblici. [Dettagli sui file generati](docs/USO.md)
 
-![Ricerca di un problema e creazione del progetto in VS Code](docs/screenshots/vscode-nuovo-problema.jpg)
+![Catalogo di Training Olinfo e creazione di un progetto in CLion](docs/screenshots/clion-nuovo-problema.png)
 
 ## Invia e segui la valutazione
 
@@ -38,11 +38,15 @@ Apri **Olinfo Trainer → Nuovo problema**, cerca per nome o identificativo e sc
 2. Premi l’icona **Upload** accanto al punteggio, oppure **Invia soluzione** nella scheda **Questo problema**. Controlla il problema e il file nel dialogo, poi scegli **Invia a Training**.
 3. La rotellina segnala l’invio e la valutazione. Il bollino a destra dei punti usa i colori di Training. Nella scheda **Questo problema** trovi gli invii recenti e il collegamento allo storico completo.
 
-![Problema corrente, invii di esempio e pulsante upload nella barra di stato di VS Code](docs/screenshots/vscode-invii.jpg)
+![Problema corrente, miglior punteggio e storico degli invii in CLion](docs/screenshots/clion-invii.png)
 
-![Conferma di invio della soluzione in VS Code](docs/screenshots/vscode-conferma.jpg)
+Per il primo invio, completa la registrazione e accetta le [linee guida di Training](https://training.olinfo.it/guidelines).
 
-Il badge **Olinfo** apre anche il pannello account con foto, punti totali, problemi risolti e posizione in classifica. Per il primo invio, completa la registrazione e accetta le [linee guida di Training](https://training.olinfo.it/guidelines).
+## Account Olinfo
+
+Il badge **Olinfo** apre il pannello account con foto, punti totali, problemi risolti e posizione in classifica.
+
+![Pannello Account Olinfo aperto dalla barra di stato di CLion](docs/screenshots/clion-account.png)
 
 ## Sviluppo e contributi
 
