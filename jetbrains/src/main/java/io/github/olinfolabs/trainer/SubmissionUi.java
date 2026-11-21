@@ -13,15 +13,19 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.wm.WindowManager;
+import com.intellij.ui.components.JBLabel;
+import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 
-import java.awt.event.MouseEvent;
+import java.awt.Component;
+import javax.swing.JComponent;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -78,7 +82,7 @@ public final class SubmissionUi implements Disposable {
     boolean submitting() { return submitting; }
     String pendingId() {
         var tracked = pending;
-        return tracked == null ? null : tracked.id();
+        return tracked == null || System.currentTimeMillis() >= tracked.until() ? null : tracked.id();
     }
 
     void listen(Disposable lifetime, Runnable listener) {
@@ -143,7 +147,7 @@ public final class SubmissionUi implements Disposable {
                         .filter(row -> result.best().equals(row.score()))
                         .findFirst().map(row -> AccountData.scoreColor(row.score(), row.color())).orElse("");
                 problem = new Problem(link, title, mode, result, waiting, false, null);
-                publish(new Snapshot("Olinfo " + best + (waiting ? " · in corso" : ""), tooltip, color));
+                publish(new Snapshot("Olinfo " + best, tooltip, color));
             } catch (SubmissionClient.LoginRequired exception) {
                 needsLogin = true;
                 if (accountSession != null) clearAccount();
@@ -284,8 +288,9 @@ public final class SubmissionUi implements Disposable {
     }
 
     private void confirmAndSend(ProjectLink link, String session) {
-        if (Messages.showYesNoDialog(project, "Inviare " + link.source() + " a Training Olinfo per " + link.task() + "?",
-                "Invia soluzione Olinfo", "Invia", "Annulla", Messages.getQuestionIcon()) != Messages.YES) return;
+        var current = problem;
+        String title = current != null && current.link().task().equals(link.task()) ? current.title() : null;
+        if (!confirmSubmission(link, title)) return;
         var file = LocalFileSystem.getInstance().findFileByNioFile(link.root().resolve(link.source()));
         if (file != null) {
             var manager = FileDocumentManager.getInstance();
@@ -309,15 +314,36 @@ public final class SubmissionUi implements Disposable {
         });
     }
 
-    void menu(MouseEvent event) {
-        if (disposed || event == null) return;
+    private boolean confirmSubmission(ProjectLink link, String title) {
+        return new DialogWrapper(project) {
+            {
+                setTitle("Invia soluzione");
+                setOKButtonText("Invia a Training");
+                setCancelButtonText("Annulla");
+                init();
+            }
+
+            @Override protected JComponent createCenterPanel() {
+                var task = new JBLabel(title == null ? link.task() : title + " (" + link.task() + ")");
+                task.putClientProperty("html.disable", true);
+                return FormBuilder.createFormBuilder()
+                        .addLabeledComponent("Problema", task)
+                        .addLabeledComponent("Sorgente", new JBLabel(link.source()))
+                        .addLabeledComponent("Linguaggio", new JBLabel(TrainingClient.languageLabel(link.language())))
+                        .addComponent(new JBLabel("Le modifiche al sorgente saranno salvate prima dell’invio."), 12)
+                        .getPanel();
+            }
+        }.showAndGet();
+    }
+
+    void menu(Component anchor) {
+        if (disposed || !anchor.isShowing()) return;
         var panel = new OlinfoDashboard.AccountPanel(this);
         var popup = JBPopupFactory.getInstance().createComponentPopupBuilder(panel, null)
                 .setTitle("Account Olinfo").setMovable(true).setRequestFocus(true).createPopup();
         listen(popup, panel::render);
         accountVisible = true;
         Disposer.register(popup, () -> accountVisible = false);
-        var anchor = event.getComponent();
         var point = anchor.getLocationOnScreen();
         var size = panel.getPreferredSize();
         point.translate(anchor.getWidth() - size.width, -size.height - 36);

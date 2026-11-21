@@ -56,7 +56,7 @@ Controlla anche una ricerca senza risultati, una cartella già esistente e il pu
 
 I test predefiniti usano fixture locali e non dipendono dal servizio esterno. Imposta `OLINFO_LIVE_TEST=1` per includere un test end-to-end con il catalogo reale. In PowerShell usa `$env:OLINFO_LIVE_TEST = '1'` prima di avviare la suite.
 
-I test di invio simulano il login, il multipart e gli esiti della valutazione. Per una prova manuale, apri un progetto con `olinfo.xml`, accedi con il tuo account Training, verifica le linee guida e invia il sorgente dal menu **Olinfo**. Confronta l’esito e il miglior punteggio con la pagina **Sottoposizioni**. La prova manuale crea un invio nel tuo account.
+I test di invio simulano il login, il multipart e gli esiti della valutazione. Per una prova manuale, apri un progetto con `olinfo.xml`, accedi dal badge **Olinfo** e usa l’icona **Upload** accanto al punteggio. Verifica sorgente e linguaggio nel dialogo, poi controlla la rotellina, l’esito e il punteggio nella scheda **Questo problema**. La prova manuale crea un invio nel tuo account.
 
 ## Struttura
 

@@ -72,6 +72,8 @@ final class TrainingClient {
 
     TrainingClient(Request request) { this.request = request; }
 
+    static String languageLabel(String id) { return CONFIG.getProperty("code." + id, id); }
+
     private static byte[] download(String path, int limit, String locale) throws IOException {
         if (!path.startsWith("/") || path.startsWith("//") || path.indexOf('\\') >= 0) {
             throw new IOException("Indirizzo di download non valido.");
@@ -184,7 +186,7 @@ final class TrainingClient {
                         .findFirst().orElse(null);
                 Asset starter = starterFor(files, id, language);
                 if (!page.mode().equals("grader") || grader != null || starter != null) {
-                    options.add(new Language(new Selection(language, CONFIG.getProperty("code." + language)), grader, starter));
+                    options.add(new Language(new Selection(language, languageLabel(language)), grader, starter));
                 }
             }
         }

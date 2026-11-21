@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const { readProject, readSource } = require('./project-link');
 const { LoginRequired, SubmissionClient, origin } = require('./submission-client');
 const { scoreColor } = require('./account');
-const { taskPage } = require('./training');
+const { taskPage, languageLabel } = require('./training');
 
 const palette = { red: '#f87171', orange: '#fb923c', yellow: '#facc15', lime: '#a3e635', green: '#4ade80' };
 
@@ -13,8 +13,16 @@ const errorMessage = error => error instanceof Error ? error.message : 'Operazio
 function registerSubmissions(context, onChange, openAccount) {
   const api = new SubmissionClient();
   const item = vscode.window.createStatusBarItem('olinfoTrainer.score', vscode.StatusBarAlignment.Right, 30);
+  const indicator = vscode.window.createStatusBarItem('olinfoTrainer.indicator', vscode.StatusBarAlignment.Right, 29.99);
+  const upload = vscode.window.createStatusBarItem('olinfoTrainer.upload', vscode.StatusBarAlignment.Right, 29.98);
+  item.name = 'Account e punteggio Olinfo';
   item.command = 'olinfoTrainer.submissionMenu';
+  indicator.name = 'Colore del punteggio Olinfo';
+  indicator.text = '$(primitive-dot)';
+  indicator.command = item.command;
+  upload.name = 'Invia soluzione Olinfo';
   let working = false;
+  let uploading = false;
   let refreshId = 0;
   let nextRefresh = 0;
   let needsLogin = false;
@@ -38,6 +46,26 @@ function registerSubmissions(context, onChange, openAccount) {
       item.tooltip = tooltip;
     } else {
       item.tooltip = tooltipText;
+    }
+    const color = palette[current?.color];
+    if (color) {
+      indicator.color = color;
+      indicator.tooltip = 'Miglior punteggio Olinfo · ' + current.best;
+      indicator.show();
+    } else {
+      indicator.hide();
+    }
+    if (current?.source) {
+      const tracking = monitored.get(activeRoot);
+      const waiting = current.waiting || (tracking && Date.now() < tracking.until);
+      upload.text = uploading || waiting ? '$(loading~spin)' : '$(cloud-upload)';
+      upload.command = uploading || waiting ? undefined : 'olinfoTrainer.submit';
+      upload.tooltip = uploading ? 'Invio del sorgente in corso'
+        : waiting ? 'Valutazione in corso su Training Olinfo' : 'Invia soluzione a Training Olinfo';
+      upload.accessibilityInformation = { label: upload.tooltip };
+      upload.show();
+    } else {
+      upload.hide();
     }
     onChange({ problem: current, account });
   };
@@ -110,14 +138,12 @@ function registerSubmissions(context, onChange, openAccount) {
         problemMeta = { task: link.task, title: meta?.title, mode: meta?.mode };
       }
       problem = { ...problemMeta, language: link.language, source: link.source };
-      item.name = 'Punteggio Olinfo';
       tooltipText = link.task + ' · Apri account Olinfo';
       const session = await context.secrets.get(key);
       if (id !== refreshId) return;
       if (!session) {
         needsLogin = true;
         item.text = '$(sign-in) Olinfo';
-        item.color = undefined;
         item.show();
         setProblem({ ...problem, signedOut: true });
         return;
@@ -143,8 +169,7 @@ function registerSubmissions(context, onChange, openAccount) {
       const best = result.rows.length === 0 ? '0 su 0' : result.best === undefined ? '—' : result.best + ' pt';
       const color = result.rows.length === 0 && !waiting ? 'red'
         : result.rows.find(row => row.score !== undefined && row.score === result.best)?.color ?? scoreColor(result.best);
-      item.text = (waiting ? '$(sync~spin)' : '$(circle-filled)') + ' $(account) Olinfo ' + best;
-      item.color = palette[color];
+      item.text = '$(account) Olinfo ' + best;
       tooltipText = link.task + ' · Miglior punteggio: ' + best
         + (submission ? '\nUltimo invio #' + submission.id + ' · ' + submission.outcome : '');
       item.show();
@@ -161,7 +186,6 @@ function registerSubmissions(context, onChange, openAccount) {
         }
       }
       item.text = error instanceof LoginRequired ? '$(sign-in) Olinfo' : '$(warning) Olinfo';
-      item.color = undefined;
       tooltipText = errorMessage(error);
       item.show();
       setProblem(problem && { ...problem, signedOut: error instanceof LoginRequired, error: errorMessage(error) });
@@ -193,9 +217,16 @@ function registerSubmissions(context, onChange, openAccount) {
     let session = await context.secrets.get(key);
     if (!session || needsLogin) session = await login();
     if (!session) return;
-    const confirmed = await vscode.window.showWarningMessage(
-      'Inviare ' + link.source + ' a Training Olinfo per il problema ' + link.task + '?', { modal: true }, 'Invia');
-    if (confirmed !== 'Invia') return;
+    const title = problemMeta?.task === link.task && problemMeta.title;
+    const task = title ? title + ' (' + link.task + ')' : link.task;
+    const confirmed = await vscode.window.showInformationMessage('Inviare la soluzione a Training Olinfo?', {
+      modal: true,
+      detail: task + '\n' + link.source + ' · ' + languageLabel(link.language)
+        + '\n\nLe modifiche al sorgente saranno salvate prima dell’invio.',
+    }, 'Invia a Training');
+    if (confirmed !== 'Invia a Training') return;
+    uploading = true;
+    publish();
     const uri = vscode.Uri.file(link.root);
     const sourceUri = vscode.Uri.joinPath(uri, link.source);
     const editor = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === sourceUri.toString());
@@ -221,6 +252,10 @@ function registerSubmissions(context, onChange, openAccount) {
       void vscode.window.showErrorMessage(errorMessage(error));
     } finally {
       working = false;
+      if (uploading) {
+        uploading = false;
+        publish();
+      }
     }
   }
 
@@ -234,7 +269,7 @@ function registerSubmissions(context, onChange, openAccount) {
 
   const watcher = vscode.workspace.createFileSystemWatcher('**/olinfo.xml');
   const timer = setInterval(() => { void refresh(); void refreshAccount(); }, 5000);
-  context.subscriptions.push(item, watcher, { dispose: () => { ++refreshId; clearInterval(timer); } },
+  context.subscriptions.push(item, indicator, upload, watcher, { dispose: () => { ++refreshId; clearInterval(timer); } },
     watcher.onDidCreate(() => void refresh(true)), watcher.onDidChange(() => void refresh(true)),
     watcher.onDidDelete(() => void refresh(true)), vscode.workspace.onDidGrantWorkspaceTrust(() => void refresh(true)),
     vscode.workspace.onDidChangeWorkspaceFolders(() => void refresh(true)),

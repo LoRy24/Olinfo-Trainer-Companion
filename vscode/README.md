@@ -10,6 +10,6 @@ L’estensione usa il catalogo pubblico. È supportato VS Code Desktop dalla ver
 
 Apri la cartella del problema con `olinfo.xml` alla radice e clicca **Olinfo** nella barra di stato per accedere. La finestra account mostra username, foto, punti totali, problemi risolti e posizione in classifica.
 
-Nella barra laterale, **Questo problema** mostra il sorgente collegato, il miglior punteggio con il colore di Training e gli ultimi invii. Da lì puoi inviare una soluzione e seguirne la valutazione.
+Per inviare il sorgente, premi l’icona **Upload** accanto ai punti o scegli **Invia soluzione** in **Questo problema**. La rotellina segnala l’invio e la valutazione. Il bollino a destra dei punti riprende i colori di Training.
 
 Progetto indipendente dalle Olimpiadi Italiane di Informatica. Il logo è un adattamento di quello delle OII. L’attribuzione è inclusa nel pacchetto.

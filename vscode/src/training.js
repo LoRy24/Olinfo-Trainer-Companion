@@ -10,6 +10,7 @@ const config = Object.fromEntries(source.trim().split(/\r?\n/).map(line => line.
 const origin = config.origin;
 const locales = config['pdf.locales'].split(',');
 const languages = config['code.languages'].split(',');
+const languageLabel = id => config['code.' + id] || id;
 const taskPattern = /^\/task\/([a-z0-9][a-z0-9_-]*)$/i;
 const filePattern = /^\/files\/[a-f0-9]{40}\/[^/?#]+$/i;
 const statementPattern = /\/files\/[a-f0-9]{40}\/testo\.pdf(?=["'\\#\s]|$)/gi;
@@ -190,7 +191,7 @@ class TrainingClient {
       const grader = files.find(file => isGrader(file.name) && codeLanguage(file.name) === idLanguage);
       const starter = starterFor(files, id, idLanguage);
       if (result.mode !== 'output-only' && (result.mode !== 'grader' || grader || starter)) {
-        options.push({ id: idLanguage, label: config['code.' + idLanguage], grader, starter });
+        options.push({ id: idLanguage, label: languageLabel(idLanguage), grader, starter });
       }
     }
     if (result.mode === 'output-only') options.push({ id: 'output', label: 'Solo output' });
@@ -223,4 +224,4 @@ class TrainingClient {
   }
 }
 
-module.exports = { TrainingClient, searchPage, taskPage, statementPath, isHeader, samplePair };
+module.exports = { TrainingClient, searchPage, taskPage, languageLabel, statementPath, isHeader, samplePair };

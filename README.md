@@ -1,70 +1,51 @@
 # Olinfo Trainer Companion
 
-Olinfo Trainer Companion crea una cartella di lavoro per un problema di [Training Olinfo](https://training.olinfo.it/) da Visual Studio Code o da un IDE JetBrains come CLion e PyCharm.
+Crea progetti per [Training Olinfo](https://training.olinfo.it/) in **VS Code**, **CLion**, **IntelliJ IDEA** e **PyCharm**. Scarica testo e sorgenti, invia la soluzione e segui la valutazione dall’IDE.
+
+[Scarica l’ultima release](https://github.com/LoRy24/Olinfo-Trainer-Companion/releases/latest)
 
 ## Installazione
 
-Scarica il pacchetto per il tuo IDE dalla [release più recente](https://github.com/LoRy24/Olinfo-Trainer-Companion/releases/latest). Per provare una build di sviluppo, scarica il relativo artefatto da [GitHub Actions](https://github.com/LoRy24/Olinfo-Trainer-Companion/actions) ed estrai l’archivio esterno.
+### Visual Studio Code
 
-| IDE | Pacchetto | Installazione |
-| --- | --- | --- |
-| Visual Studio Code Desktop 1.96+ | `.vsix` | **Extensions → … → Install from VSIX…** |
-| IDE JetBrains su IntelliJ Platform, dalla versione 2024.3 | `.zip` | **Settings → Plugins → ⚙ → Install Plugin from Disk…** |
+1. Scarica il file **`.vsix`** dalla release. Serve VS Code Desktop 1.96 o successivo.
+2. Apri **Extensions**, fai clic su **…** e scegli **Install from VSIX…**.
+3. Seleziona il file scaricato e ricarica la finestra se richiesto. L’icona **Olinfo Trainer** appare nella barra laterale.
 
-Puoi anche [compilare e avviare entrambi i plugin in locale](docs/SVILUPPO.md).
+Per aggiornare, installa il nuovo `.vsix` allo stesso modo. [Guida di VS Code](https://code.visualstudio.com/docs/configure/extensions/extension-marketplace#_install-from-a-vsix)
 
-Per ricevere gli aggiornamenti in JetBrains, aggiungi questo URL in **Settings → Plugins → ⚙ → Manage Plugin Repositories…** e seleziona il repository personalizzato come fonte degli aggiornamenti se l’IDE lo chiede. [Guida JetBrains](https://www.jetbrains.com/help/clion/managing-plugins.html#custom-plugin-repositories)
+### CLion, IntelliJ IDEA e PyCharm
+
+1. Scarica il file **`.zip`** dalla release e lascialo compresso. Serve un IDE JetBrains 2024.3 o successivo.
+2. Apri **Settings → Plugins → ⚙ → Install Plugin from Disk…**. Su macOS apri **Settings** dal menu dell’IDE.
+3. Seleziona lo ZIP e riavvia se richiesto. Da **New Project** scegli **Olinfo Trainer**, nella sezione **Other** se presente.
+
+Per ricevere gli aggiornamenti nell’IDE, apri **Settings → Plugins → ⚙ → Manage Plugin Repositories…** e aggiungi questo indirizzo. [Guida JetBrains](https://www.jetbrains.com/help/idea/managing-plugins.html#custom-plugin-repositories)
 
 ```text
 https://github.com/LoRy24/Olinfo-Trainer-Companion/releases/latest/download/updatePlugins.xml
 ```
 
-Per VS Code, puoi installare il nuovo VSIX da GitHub Releases. Gli aggiornamenti automatici nell’IDE sono disponibili quando l’estensione è pubblicata nel Visual Studio Marketplace. [Guida alla pubblicazione](docs/SVILUPPO.md#release)
+## Crea un progetto
 
-## Nuovo problema
+Apri **Olinfo Trainer → Nuovo problema**, cerca per nome o identificativo e scegli lingua del PDF, linguaggio e destinazione. Il progetto contiene il PDF, `input.txt`, `output.txt`, `olinfo.xml`, il sorgente e gli eventuali allegati pubblici. [Dettagli sui file generati](docs/USO.md)
 
-1. In VS Code, apri **Olinfo Trainer** dalla barra laterale e scegli **Nuovo problema**. Puoi aprire la scheda anche dalla palette dei comandi. In CLion, PyCharm e IntelliJ IDEA, scegli **New Project** dalla schermata iniziale o **File → New Project** da un progetto aperto. Seleziona **Olinfo Trainer** nell’elenco, nella sezione **Other** se presente. Da un progetto aperto puoi anche aprire la scheda **Nuovo problema** nella finestra laterale **Olinfo Trainer**.
-2. Cerca per titolo o identificativo. Ogni ricerca, inclusa la navigazione tra le pagine, interroga il catalogo pubblico aggiornato.
-3. Seleziona il problema, la lingua del PDF e il linguaggio di programmazione.
-4. Scegli il nome del progetto e la cartella padre. Dal wizard JetBrains la creazione apre il progetto. Nella scheda aperta da **Tools** o in VS Code, premi **Crea progetto**, poi **Apri cartella**.
+![Ricerca di un problema e creazione del progetto in VS Code](docs/screenshots/vscode-nuovo-problema.jpg)
 
-### File generati
+## Invia e segui la valutazione
 
-- `testo.pdf` contiene la traduzione scelta tra quelle pubblicate per il problema.
-- `olinfo.xml` collega la cartella al problema e indica il linguaggio e il sorgente da inviare.
-- `input.txt` e `output.txt` sono sempre presenti. Se gli allegati contengono una coppia di esempi riconoscibile, i file vengono precompilati con la prima coppia. Negli altri casi sono vuoti.
-- Il sorgente usa il template pubblico quando è disponibile. Per un problema C++ autonomo senza template, il plugin genera `<id_problema>.cpp` con `#include <bits/stdc++.h>`, `using namespace std;` e `int main()`. Per gli altri problemi C++ il sorgente si chiama `file.cpp`. Per Java viene conservato il nome del sorgente ufficiale o generato `Main.java`.
-- Il grader o stub pubblico e gli header C/C++ riconosciuti vengono importati quando disponibili. Se il problema richiede un grader che Training non pubblica, la scheda ti avvisa.
-- I progetti C/C++ con ingresso autonomo o con grader pubblico includono `CMakeLists.txt`, utilizzabile in CLion e da terminale. Per compilare il template con `bits/stdc++.h` serve una toolchain con libstdc++, come GCC o MinGW-w64.
+1. Apri la cartella con `olinfo.xml` alla radice. Fai clic su **Olinfo** nella barra di stato e accedi a Training.
+2. Premi l’icona **Upload** accanto al punteggio, oppure **Invia soluzione** nella scheda **Questo problema**. Controlla il problema e il file nel dialogo, poi scegli **Invia a Training**.
+3. La rotellina segnala l’invio e la valutazione. Il bollino a destra dei punti usa i colori di Training. Nella scheda **Questo problema** trovi gli invii recenti e il collegamento allo storico completo.
 
-Il menu propone C++, C, Python, Java e Pascal per i problemi a programma autonomo. Per i problemi con grader, i linguaggi si ricavano dai sorgenti e dai grader pubblici, poiché l’elenco ufficiale dei compilatori richiede l’accesso. Il catalogo copre i problemi CMS presenti in **Tutti i problemi**. Per un problema CMS di tipo **Solo output**, genera il PDF e i file di testo. Il catalogo Terry usa un flusso distinto, con testi spesso in Markdown e input personalizzati.
+![Problema corrente, invii di esempio e pulsante upload nella barra di stato di VS Code](docs/screenshots/vscode-invii.jpg)
 
-I problemi che leggono da `input.txt` e scrivono in `output.txt` vanno avviati con la cartella del problema come directory di lavoro. Se `output.txt` contiene un risultato atteso che vuoi conservare, salvalo prima di eseguire la soluzione. Nei problemi standard input/output puoi usare, ad esempio, `./solution < input.txt` in Bash.
+![Conferma di invio della soluzione in VS Code](docs/screenshots/vscode-conferma.jpg)
 
-La creazione usa una cartella nuova e protegge i file esistenti. L’importazione si serve delle pagine e degli allegati pubblici di Training Olinfo.
+Il badge **Olinfo** apre anche il pannello account con foto, punti totali, problemi risolti e posizione in classifica. Per il primo invio, completa la registrazione e accetta le [linee guida di Training](https://training.olinfo.it/guidelines).
 
-## Inviare una soluzione
+## Sviluppo e contributi
 
-1. Apri nell’IDE la cartella del problema, con `olinfo.xml` alla radice. La barra di stato, in basso a destra, mostra **Olinfo**.
-2. Clicca **Olinfo** e scegli **Accedi**. Usa username o email e password di Training. Al primo invio, completa eventuali passaggi di registrazione e accetta le linee guida sul sito. [Linee guida Olinfo](https://training.olinfo.it/guidelines)
-3. Apri **Olinfo Trainer → Questo problema** nella barra laterale. La scheda mostra il problema collegato a `olinfo.xml`, il miglior punteggio e gli ultimi 20 invii. Scegli **Invia soluzione** e conferma il file e il problema mostrati. In VS Code trovi il comando anche nella palette **Olinfo Trainer**. In JetBrains è in **Tools → Olinfo Trainer**.
-4. Durante la valutazione, il plugin ricontrolla gli invii circa ogni cinque secondi. Il bollino accanto al punteggio usa i colori di Training. Seleziona un invio per aprire i dettagli nel browser, oppure scegli **Tutti gli invii** per lo storico completo.
+[Guida allo sviluppo](docs/SVILUPPO.md) · [Contribuire](CONTRIBUTING.md) · [Codice di condotta](CODE_OF_CONDUCT.md) · [Sicurezza](SECURITY.md) · [Licenza MIT](LICENSE)
 
-Il badge in basso apre la scheda **Account Olinfo** con username, foto, punti totali, problemi risolti e posizione nella classifica pubblica. La scheda aggiorna i punti periodicamente finché rimane aperta e quando termina un invio monitorato.
-
-Quando lo storico è vuoto, il badge mostra **0 su 0**. Su JetBrains la foto profilo compare accanto a **Olinfo**. Su VS Code il badge mostra l’icona account e la foto è disponibile nel fumetto al passaggio del mouse e nel pannello account.
-
-Il flusso nell’IDE supporta i problemi CMS con un sorgente singolo. Per problemi di solo output o che richiedono più file, usa il modulo sul sito. **Esci** rimuove la sessione locale dell’IDE.
-
-Per collegare una cartella creata con una versione precedente, aggiungi un `olinfo.xml` alla radice e usa l’identificativo dal sito, il linguaggio (`cpp`, `c`, `py`, `java` o `pas`) e il nome effettivo del sorgente.
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<olinfo version="1" task="easy2" language="cpp" source="easy2.cpp"/>
-```
-
-## Collaborare
-
-Leggi la [guida allo sviluppo](docs/SVILUPPO.md), le [linee guida per contribuire](CONTRIBUTING.md), il [codice di condotta](CODE_OF_CONDUCT.md) e la [politica di sicurezza](SECURITY.md).
-
-Il codice è rilasciato sotto [licenza MIT](LICENSE). Il progetto è indipendente dalle Olimpiadi Italiane di Informatica. L’icona adatta il loro logo, con [attribuzione e licenza dell’asset](assets/oii/NOTICE.md).
+Il progetto è indipendente dalle Olimpiadi Italiane di Informatica. L’icona adatta il logo OII. [Attribuzione](assets/oii/NOTICE.md)
