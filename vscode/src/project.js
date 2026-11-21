@@ -1,6 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { isHeader, samplePair } = require('./training');
+const { projectXml } = require('./project-link');
 
 const native = new Set(['c', 'cpp']);
 
@@ -83,6 +84,8 @@ async function createProject(client, details, language, locale, parent, name) {
       }
     }
   }
+
+  content.set('olinfo.xml', projectXml({ task: details.id, language, source: solutionName }));
 
   // mkdir and exclusive writes make the final check safe even across two extension hosts.
   try {

@@ -60,7 +60,7 @@ test('catalogo, archivio, traduzione e generazione senza sovrascrittura', async 
   const folder = await temporary(t);
   const { target, solutionName } = await createProject(client, details, 'cpp', 'en-GB', folder, 'Demo progetto');
   assert.equal(solutionName, 'file.cpp');
-  assert.deepEqual((await fs.readdir(target)).sort(), ['CMakeLists.txt', 'file.cpp', 'grader.cpp', 'input.txt', 'output.txt', 'testo.pdf']);
+  assert.deepEqual((await fs.readdir(target)).sort(), ['CMakeLists.txt', 'file.cpp', 'grader.cpp', 'input.txt', 'olinfo.xml', 'output.txt', 'testo.pdf']);
   assert.equal(await fs.readFile(path.join(target, 'input.txt'), 'utf8'), '2 2\n');
   assert.equal(await fs.readFile(path.join(target, 'output.txt'), 'utf8'), '4\n');
   assert.equal(await fs.readFile(path.join(target, 'testo.pdf'), 'utf8'), '%PDF-English');
@@ -77,13 +77,13 @@ test('programma autonomo senza allegati con file di I/O vuoti', async t => {
   const details = await client.details('demo_stdio');
   const folder = await temporary(t);
   const { target } = await createProject(client, details, 'py', 'it-IT', folder, 'Python');
-  assert.deepEqual((await fs.readdir(target)).sort(), ['file.py', 'input.txt', 'output.txt', 'testo.pdf']);
+  assert.deepEqual((await fs.readdir(target)).sort(), ['file.py', 'input.txt', 'olinfo.xml', 'output.txt', 'testo.pdf']);
   assert.equal((await fs.stat(path.join(target, 'input.txt'))).size, 0);
   assert.equal((await fs.stat(path.join(target, 'output.txt'))).size, 0);
 
   const cpp = await createProject(client, details, 'cpp', 'it-IT', folder, 'Nome del progetto');
   assert.equal(cpp.solutionName, 'demo_stdio.cpp');
-  assert.deepEqual((await fs.readdir(cpp.target)).sort(), ['CMakeLists.txt', 'demo_stdio.cpp', 'input.txt', 'output.txt', 'testo.pdf']);
+  assert.deepEqual((await fs.readdir(cpp.target)).sort(), ['CMakeLists.txt', 'demo_stdio.cpp', 'input.txt', 'olinfo.xml', 'output.txt', 'testo.pdf']);
   const source = await fs.readFile(path.join(cpp.target, cpp.solutionName), 'utf8');
   assert.match(source, /^#include <bits\/stdc\+\+\.h>\nusing namespace std;\n\nint main\(\) \{/);
   assert.match(await fs.readFile(path.join(cpp.target, 'CMakeLists.txt'), 'utf8'), /add_executable\(solution "demo_stdio\.cpp"\)/);

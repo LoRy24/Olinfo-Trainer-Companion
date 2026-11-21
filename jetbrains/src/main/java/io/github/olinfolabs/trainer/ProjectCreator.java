@@ -115,6 +115,7 @@ final class ProjectCreator {
             }
         }
 
+        content.put("olinfo.xml", ProjectLink.document(details.id(), language, solutionName));
         return new Prepared(target, solutionName, content);
     }
 

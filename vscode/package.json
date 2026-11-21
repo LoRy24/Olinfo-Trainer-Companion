@@ -2,9 +2,12 @@
   "name": "olinfo-trainer-companion",
   "displayName": "Olinfo Trainer Companion",
   "description": "Crea progetti locali a partire dai problemi di training.olinfo.it.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "olinfo-trainer-companion",
-  "repository": { "type": "git", "url": "https://github.com/LoRy24/Olinfo-Trainer-Companion.git" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LoRy24/Olinfo-Trainer-Companion.git"
+  },
   "license": "MIT",
   "engines": {
     "vscode": "^1.96.0"
@@ -20,6 +23,9 @@
   ],
   "icon": "media/icon.png",
   "main": "./dist/extension.js",
+  "activationEvents": [
+    "workspaceContains:olinfo.xml"
+  ],
   "extensionKind": [
     "workspace"
   ],
@@ -34,6 +40,31 @@
       {
         "command": "olinfoTrainer.newProblem",
         "title": "Nuovo problema",
+        "category": "Olinfo Trainer"
+      },
+      {
+        "command": "olinfoTrainer.login",
+        "title": "Accedi a Training Olinfo",
+        "category": "Olinfo Trainer"
+      },
+      {
+        "command": "olinfoTrainer.logout",
+        "title": "Esci dal plugin",
+        "category": "Olinfo Trainer"
+      },
+      {
+        "command": "olinfoTrainer.submit",
+        "title": "Invia soluzione",
+        "category": "Olinfo Trainer"
+      },
+      {
+        "command": "olinfoTrainer.refreshScore",
+        "title": "Aggiorna punteggio",
+        "category": "Olinfo Trainer"
+      },
+      {
+        "command": "olinfoTrainer.submissionMenu",
+        "title": "Invii e punteggio",
         "category": "Olinfo Trainer"
       }
     ]

@@ -31,6 +31,7 @@ Per VS Code, puoi installare il nuovo VSIX da GitHub Releases. Gli aggiornamenti
 ### File generati
 
 - `testo.pdf` contiene la traduzione scelta tra quelle pubblicate per il problema.
+- `olinfo.xml` collega la cartella al problema e indica il linguaggio e il sorgente da inviare.
 - `input.txt` e `output.txt` sono sempre presenti. Se gli allegati contengono una coppia di esempi riconoscibile, i file vengono precompilati con la prima coppia. Negli altri casi sono vuoti.
 - Il sorgente usa il template pubblico quando è disponibile. Per un problema C++ autonomo senza template, il plugin genera `<id_problema>.cpp` con `#include <bits/stdc++.h>`, `using namespace std;` e `int main()`. Per gli altri problemi C++ il sorgente si chiama `file.cpp`. Per Java viene conservato il nome del sorgente ufficiale o generato `Main.java`.
 - Il grader o stub pubblico e gli header C/C++ riconosciuti vengono importati quando disponibili. Se il problema richiede un grader che Training non pubblica, la scheda ti avvisa.
@@ -40,7 +41,23 @@ Il menu propone C++, C, Python, Java e Pascal per i problemi a programma autonom
 
 I problemi che leggono da `input.txt` e scrivono in `output.txt` vanno avviati con la cartella del problema come directory di lavoro. Se `output.txt` contiene un risultato atteso che vuoi conservare, salvalo prima di eseguire la soluzione. Nei problemi standard input/output puoi usare, ad esempio, `./solution < input.txt` in Bash.
 
-La creazione usa una cartella nuova e protegge i file esistenti. L’importazione si serve delle pagine e degli allegati pubblici di Training Olinfo e non richiede credenziali. L’invio delle soluzioni è fuori dallo scope di questa versione.
+La creazione usa una cartella nuova e protegge i file esistenti. L’importazione si serve delle pagine e degli allegati pubblici di Training Olinfo.
+
+## Inviare una soluzione
+
+1. Apri nell’IDE la cartella del problema, con `olinfo.xml` alla radice. La barra di stato, in basso a destra, mostra **Olinfo**.
+2. Clicca **Olinfo** e scegli **Accedi a Training Olinfo**. Usa username o email e password di Training. Al primo invio, completa eventuali passaggi di registrazione e accetta le linee guida sul sito. [Linee guida Olinfo](https://training.olinfo.it/guidelines)
+3. Scegli **Invia soluzione** dallo stesso menu e conferma il file e il problema mostrati. In VS Code trovi i comandi anche nella palette **Olinfo Trainer**. In JetBrains sono in **Tools → Olinfo Trainer**.
+4. Il plugin controlla l’esito e aggiorna il **miglior punteggio del tuo account** per quel problema, inclusi gli invii fatti dal sito. Per vedere i dettagli, clicca sulla barra di stato e apri l’invio nel browser.
+
+Il flusso nell’IDE supporta i problemi CMS con un sorgente singolo. Per problemi di solo output o che richiedono più file, usa il modulo sul sito. **Esci dal plugin** rimuove la sessione locale dell’IDE.
+
+Per collegare una cartella creata con una versione precedente, aggiungi un `olinfo.xml` alla radice e usa l’identificativo dal sito, il linguaggio (`cpp`, `c`, `py`, `java` o `pas`) e il nome effettivo del sorgente.
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<olinfo version="1" task="easy2" language="cpp" source="easy2.cpp"/>
+```
 
 ## Collaborare
 

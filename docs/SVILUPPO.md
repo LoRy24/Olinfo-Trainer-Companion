@@ -56,6 +56,8 @@ Controlla anche una ricerca senza risultati, una cartella già esistente e il pu
 
 I test predefiniti usano fixture locali e non dipendono dal servizio esterno. Imposta `OLINFO_LIVE_TEST=1` per includere un test end-to-end con il catalogo reale. In PowerShell usa `$env:OLINFO_LIVE_TEST = '1'` prima di avviare la suite.
 
+I test di invio simulano il login, il multipart e gli esiti della valutazione. Per una prova manuale, apri un progetto con `olinfo.xml`, accedi con il tuo account Training, verifica le linee guida e invia il sorgente dal menu **Olinfo**. Confronta l’esito e il miglior punteggio con la pagina **Sottoposizioni**. La prova manuale crea un invio nel tuo account.
+
 ## Struttura
 
 | Percorso | Contenuto |
@@ -66,6 +68,8 @@ I test predefiniti usano fixture locali e non dipendono dal servizio esterno. Im
 | `.github/workflows/build.yml` | Test e creazione automatica dei due pacchetti |
 
 I client interrogano la pagina pubblica `/tasks/{pagina}?search=…` e le pagine `/task/{id}`. I dettagli sono ricavati dal markup pubblico e il PDF viene richiesto con la locale scelta. La piattaforma non offre alle sessioni anonime un contratto stabile per questi dati. Se cambia il markup, aggiorna i due client e le fixture. Il [sorgente di CMSocial](https://github.com/olimpiadi-informatica/cmsocial) documenta il comportamento del sito.
+
+Per l’accesso il plugin legge il riferimento del modulo di login pubblicato dal sito. L’invio usa `/files/submit` e ricava nome del campo e compilatore dal modulo autenticato. Il monitor legge `/task/{id}/submissions`, inizialmente ogni pochi secondi per gli invii in corso. Le fixture condivise permettono di aggiornare le due implementazioni insieme quando il sito cambia.
 
 ## Release
 

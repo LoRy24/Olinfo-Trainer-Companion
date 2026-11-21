@@ -54,7 +54,7 @@ class ImportTest {
         var details = client.details("demo_stdio");
         var project = ProjectCreator.create(client, details, "py", "it-IT", folder.toString(), "Python");
         try (var files = Files.list(project.target())) {
-            assertEquals(List.of("file.py", "input.txt", "output.txt", "testo.pdf"),
+            assertEquals(List.of("file.py", "input.txt", "olinfo.xml", "output.txt", "testo.pdf"),
                     files.map(item -> item.getFileName().toString()).sorted().toList());
         }
         assertEquals(0, Files.size(project.target().resolve("input.txt")));
@@ -63,7 +63,7 @@ class ImportTest {
         var cpp = ProjectCreator.create(client, details, "cpp", "it-IT", folder.toString(), "Nome del progetto");
         assertEquals("demo_stdio.cpp", cpp.solutionName());
         try (var files = Files.list(cpp.target())) {
-            assertEquals(List.of("CMakeLists.txt", "demo_stdio.cpp", "input.txt", "output.txt", "testo.pdf"),
+            assertEquals(List.of("CMakeLists.txt", "demo_stdio.cpp", "input.txt", "olinfo.xml", "output.txt", "testo.pdf"),
                     files.map(item -> item.getFileName().toString()).sorted().toList());
         }
         String source = Files.readString(cpp.target().resolve(cpp.solutionName()));

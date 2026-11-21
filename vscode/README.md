@@ -8,4 +8,6 @@ Per un problema C++ autonomo senza template pubblico, l’estensione genera `<id
 
 L’estensione usa il catalogo pubblico. È supportato VS Code Desktop dalla versione 1.96.
 
+Apri la cartella del problema con `olinfo.xml` alla radice e clicca **Olinfo** nella barra di stato per accedere, inviare il sorgente e vedere il tuo miglior punteggio su Training Olinfo.
+
 Progetto indipendente dalle Olimpiadi Italiane di Informatica. Il logo è un adattamento di quello delle OII. L’attribuzione è inclusa nel pacchetto.

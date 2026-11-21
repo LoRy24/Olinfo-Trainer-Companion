@@ -11,6 +11,7 @@
     <depends optional="true" config-file="olinfo-idea.xml">com.intellij.modules.java</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <statusBarWidgetFactory id="OlinfoTrainer.Score" implementation="io.github.olinfolabs.trainer.OlinfoScoreWidget"/>
         <directoryProjectGenerator implementation="io.github.olinfolabs.trainer.OlinfoDirectoryProjectGenerator"/>
         <toolWindow id="Olinfo Trainer" anchor="right"
                     icon="/icons/toolWindow.svg"
@@ -18,6 +19,13 @@
     </extensions>
 
     <actions>
+        <group id="OlinfoTrainer.Submissions" text="Olinfo Trainer" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="OlinfoTrainer.Login" text="Accedi a Training Olinfo" class="io.github.olinfolabs.trainer.SubmissionActions$Login"/>
+            <action id="OlinfoTrainer.Submit" text="Invia soluzione" class="io.github.olinfolabs.trainer.SubmissionActions$Submit"/>
+            <action id="OlinfoTrainer.RefreshScore" text="Aggiorna punteggio" class="io.github.olinfolabs.trainer.SubmissionActions$Refresh"/>
+            <action id="OlinfoTrainer.Logout" text="Esci dal plugin" class="io.github.olinfolabs.trainer.SubmissionActions$Logout"/>
+        </group>
         <action id="OlinfoTrainer.NewProblem" text="Olinfo Trainer: Nuovo problema"
                 description="Apri la scheda di creazione dei problemi Olinfo"
                 class="io.github.olinfolabs.trainer.OpenTrainerAction">

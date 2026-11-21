@@ -2,8 +2,10 @@ const vscode = require('vscode');
 const { readFileSync } = require('node:fs');
 const { TrainingClient } = require('./training');
 const { createProject } = require('./project');
+const { registerSubmissions } = require('./submissions');
 
 function activate(context) {
+  registerSubmissions(context);
   let currentPanel;
   const client = new TrainingClient();
   const media = vscode.Uri.joinPath(context.extensionUri, 'media');
