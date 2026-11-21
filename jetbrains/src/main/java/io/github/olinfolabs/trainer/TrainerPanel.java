@@ -217,7 +217,9 @@ final class TrainerPanel implements Disposable {
         area.setWrapStyleWord(true);
         area.setOpaque(false);
         area.setBorder(null);
+        area.setFont(new JBLabel().getFont());
         area.setColumns(1);
+        area.setRows(1);
         return area;
     }
 
