@@ -2,7 +2,7 @@
   "name": "olinfo-trainer-companion",
   "displayName": "Olinfo Trainer Companion",
   "description": "Crea progetti locali a partire dai problemi di training.olinfo.it.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "olinfo-trainer-companion",
   "repository": {
     "type": "git",
@@ -36,6 +36,24 @@
     }
   },
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "olinfoTrainer",
+          "title": "Olinfo Trainer",
+          "icon": "media/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "olinfoTrainer": [
+        {
+          "id": "olinfoTrainer.workspace",
+          "name": "Olinfo Trainer",
+          "type": "webview"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "olinfoTrainer.newProblem",

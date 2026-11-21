@@ -19,6 +19,10 @@ public final class OpenTrainerAction extends DumbAwareAction {
         var project = event.getProject();
         if (project == null) return;
         var window = ToolWindowManager.getInstance(project).getToolWindow("Olinfo Trainer");
-        if (window != null) window.activate(null);
+        if (window != null) window.activate(() -> {
+            var manager = window.getContentManager();
+            var create = manager.findContent(OlinfoToolWindow.NEW_PROBLEM);
+            if (create != null) manager.setSelectedContent(create);
+        });
     }
 }

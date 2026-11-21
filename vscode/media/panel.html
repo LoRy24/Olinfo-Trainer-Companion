@@ -3,18 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src {{csp}}; style-src {{csp}}; script-src {{csp}};">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src {{csp}} https://training.olinfo.it https://www.gravatar.com https://secure.gravatar.com https://gravatar.com https://avatars.githubusercontent.com https://lh3.googleusercontent.com; style-src {{csp}}; script-src {{csp}};">
   <link rel="stylesheet" href="{{stylesheet}}">
   <script defer src="{{script}}"></script>
-  <title>Nuovo problema Olinfo</title>
+  <title>Olinfo Trainer</title>
 </head>
 <body>
   <main>
-    <header>
-      <img src="{{icon}}" width="44" height="44" alt="">
-      <h1>Nuovo problema Olinfo</h1>
-    </header>
+    <nav class="tabs" aria-label="Olinfo Trainer">
+      <button type="button" id="tab-new" aria-pressed="true">Nuovo problema</button>
+      <button type="button" id="tab-current" aria-pressed="false">Questo problema</button>
+    </nav>
 
+    <div id="new-pane">
     <section aria-labelledby="catalog-title">
       <h2 id="catalog-title">Catalogo</h2>
       <form id="search" class="inline">
@@ -54,6 +55,54 @@
       </form>
       <p id="create-status" role="status"></p>
     </section>
+    </div>
+
+    <div id="current-pane" hidden>
+      <section>
+        <h2 id="current-title">Questo problema</h2>
+        <p id="current-info" role="status">Apri una cartella con olinfo.xml.</p>
+        <div id="current-score" class="score" hidden></div>
+        <div class="actions">
+          <button id="current-submit" disabled>Invia soluzione</button>
+          <button id="current-open" class="secondary" disabled>Apri su Training</button>
+        </div>
+      </section>
+      <section>
+        <div class="spread">
+          <h2>Sottoposizioni</h2>
+          <button id="current-refresh" class="secondary">Aggiorna</button>
+        </div>
+        <p id="current-message" role="status"></p>
+        <button id="current-login" hidden>Accedi</button>
+        <ul id="current-results" class="submissions"></ul>
+        <button id="current-history" class="secondary" hidden>Tutti gli invii</button>
+      </section>
+    </div>
+
+    <dialog id="account-dialog" aria-labelledby="account-title">
+      <div class="spread">
+        <h2 id="account-title">Account Olinfo</h2>
+        <button id="account-close" class="secondary" aria-label="Chiudi">×</button>
+      </div>
+      <p id="account-message" role="status"></p>
+      <div id="account-details" hidden>
+        <div class="identity">
+          <div id="avatar-initials" class="avatar"></div>
+          <img id="avatar-photo" class="avatar" alt="Foto profilo" referrerpolicy="no-referrer" hidden>
+          <strong id="account-user"></strong>
+        </div>
+        <dl class="metrics">
+          <div><dt>Punti totali</dt><dd id="account-points"></dd></div>
+          <div><dt>Problemi risolti</dt><dd id="account-solved"></dd></div>
+          <div><dt>Posizione in classifica</dt><dd id="account-rank"></dd></div>
+        </dl>
+      </div>
+      <div class="actions">
+        <button id="account-login" hidden>Accedi</button>
+        <button id="account-profile" class="secondary" hidden>Apri profilo</button>
+        <button id="account-logout" class="secondary" hidden>Esci</button>
+      </div>
+    </dialog>
   </main>
 </body>
 </html>

@@ -28,6 +28,34 @@ class SubmissionTest {
     }
 
     @Test
+    void readsProfileAndFindsRankAcrossTiedPages() throws IOException {
+        String html = fixture("profile.html");
+        String user = AccountData.username(html);
+        assertEquals("Fixture.User", user);
+        var profile = AccountData.profile(html);
+        assertEquals(275, profile.points());
+        assertEquals(14, profile.solved());
+        assertEquals("https://www.gravatar.com/avatar/demo?s=256", profile.avatar().toString());
+        assertNull(AccountData.profile(html.replace("www.gravatar.com", "example.com")).avatar());
+        var pages = Map.of(
+                "/ranking/1", "<a href='/ranking/3?'>Ultima</a><ul>" + rankingRow("prima", 1, 400) + "</ul>",
+                "/ranking/2", "<ul>" + rankingRow("seconda", 2, 275) + "</ul>",
+                "/ranking/3", "<ul>" + rankingRow(user, 3, 275) + rankingRow("quarta", 4, 120) + "</ul>");
+        assertEquals(3, AccountData.rank(pages::get, user, profile.points()));
+        assertNull(AccountData.rank(pages::get, "assente", profile.points()));
+        assertNull(AccountData.rank(location -> { throw new AssertionError(location); }, user, 0));
+        assertEquals("red", AccountData.scoreColor(0, null));
+        assertEquals("lime", AccountData.scoreColor(75, null));
+        assertEquals("green", AccountData.scoreColor(100, null));
+        assertEquals("orange", AccountData.scoreColor(25, "orange"));
+    }
+
+    private static String rankingRow(String user, int rank, int points) {
+        return "<li><a href='/user/%s'><div><div>%d</div></div><div>%d</div></a></li>"
+                .formatted(user, rank, points);
+    }
+
+    @Test
     void signsInSubmitsAndParsesEvaluation() throws IOException {
         String form = fixture("submit.html");
         String history = fixture("submissions.html");
@@ -67,6 +95,7 @@ class SubmissionTest {
         assertEquals(73, result.best());
         assertTrue(result.rows().getFirst().pending());
         assertEquals(0, result.rows().get(1).score());
+        assertEquals("red", result.rows().get(1).color());
         assertFalse(result.rows().getLast().pending());
     }
 

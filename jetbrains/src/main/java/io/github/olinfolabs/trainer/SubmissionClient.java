@@ -26,10 +26,11 @@ final class SubmissionClient {
     private static final Pattern FLIGHT = Pattern.compile("self\\.__next_f\\.push\\(\\[1,(\"(?:\\\\.|[^\"\\\\])*\")\\]\\)");
     private static final Pattern FIELDS = Pattern.compile("\"submissionFormat\":(\\[[^\\]]*])");
     private static final Pattern LANGUAGES = Pattern.compile("\"languages\":(\\{[^{}]*})");
+    private static final Pattern GRADE_COLOR = Pattern.compile("\\bbg-(red|orange|yellow|lime|green)-400\\b");
     private static final Gson GSON = new Gson();
     private static final int MAX_RESPONSE = 4 * 1024 * 1024;
 
-    record Row(String id, String outcome, Integer score, boolean pending) {}
+    record Row(String id, String outcome, Integer score, String color, boolean pending) {}
     record Results(List<Row> rows, Integer best) {}
     record Options(String field, String compiler) {}
 
@@ -160,7 +161,7 @@ final class SubmissionClient {
         return value.startsWith("$") ? "$" + value : value;
     }
 
-    private String page(String location, String session) throws IOException {
+    String page(String location, String session) throws IOException {
         var response = transport.exchange(location, session, Map.of(), null);
         if (response.status() == 401 || (response.status() / 100 == 3 && response.first("location").startsWith("/login"))) {
             throw new LoginRequired();
@@ -204,10 +205,14 @@ final class SubmissionClient {
             if (!href.startsWith(prefix) || anchor.children().isEmpty()) continue;
             String id = href.substring(prefix.length());
             if (!id.matches("[1-9]\\d*")) continue;
-            String outcome = anchor.children().last().text().strip();
+            var cell = anchor.children().last();
+            String outcome = cell.text().strip();
             if (outcome.isEmpty()) continue;
             Integer score = outcome.matches("\\d{1,9}") ? Integer.parseInt(outcome) : null;
-            rows.add(new Row(id, outcome, score, outcome.toLowerCase(java.util.Locale.ROOT).contains("in corso")));
+            var badge = cell.selectFirst("span");
+            var grade = GRADE_COLOR.matcher(badge == null ? "" : badge.className());
+            rows.add(new Row(id, outcome, score, grade.find() ? grade.group(1) : null,
+                    outcome.toLowerCase(java.util.Locale.ROOT).contains("in corso")));
             if (score != null && (best == null || score > best)) best = score;
         }
         if (rows.isEmpty()) {

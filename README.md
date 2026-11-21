@@ -23,7 +23,7 @@ Per VS Code, puoi installare il nuovo VSIX da GitHub Releases. Gli aggiornamenti
 
 ## Nuovo problema
 
-1. In VS Code, apri la palette dei comandi e scegli **Olinfo Trainer: Nuovo problema**. In CLion, PyCharm e IntelliJ IDEA, scegli **New Project** dalla schermata iniziale o **File → New Project** da un progetto aperto. Seleziona **Olinfo Trainer** nell’elenco, nella sezione **Other** se presente. Da un progetto aperto puoi anche usare **Tools → Olinfo Trainer: Nuovo problema**.
+1. In VS Code, apri **Olinfo Trainer** dalla barra laterale e scegli **Nuovo problema**. Puoi aprire la scheda anche dalla palette dei comandi. In CLion, PyCharm e IntelliJ IDEA, scegli **New Project** dalla schermata iniziale o **File → New Project** da un progetto aperto. Seleziona **Olinfo Trainer** nell’elenco, nella sezione **Other** se presente. Da un progetto aperto puoi anche aprire la scheda **Nuovo problema** nella finestra laterale **Olinfo Trainer**.
 2. Cerca per titolo o identificativo. Ogni ricerca, inclusa la navigazione tra le pagine, interroga il catalogo pubblico aggiornato.
 3. Seleziona il problema, la lingua del PDF e il linguaggio di programmazione.
 4. Scegli il nome del progetto e la cartella padre. Dal wizard JetBrains la creazione apre il progetto. Nella scheda aperta da **Tools** o in VS Code, premi **Crea progetto**, poi **Apri cartella**.
@@ -46,11 +46,13 @@ La creazione usa una cartella nuova e protegge i file esistenti. L’importazion
 ## Inviare una soluzione
 
 1. Apri nell’IDE la cartella del problema, con `olinfo.xml` alla radice. La barra di stato, in basso a destra, mostra **Olinfo**.
-2. Clicca **Olinfo** e scegli **Accedi a Training Olinfo**. Usa username o email e password di Training. Al primo invio, completa eventuali passaggi di registrazione e accetta le linee guida sul sito. [Linee guida Olinfo](https://training.olinfo.it/guidelines)
-3. Scegli **Invia soluzione** dallo stesso menu e conferma il file e il problema mostrati. In VS Code trovi i comandi anche nella palette **Olinfo Trainer**. In JetBrains sono in **Tools → Olinfo Trainer**.
-4. Il plugin controlla l’esito e aggiorna il **miglior punteggio del tuo account** per quel problema, inclusi gli invii fatti dal sito. Per vedere i dettagli, clicca sulla barra di stato e apri l’invio nel browser.
+2. Clicca **Olinfo** e scegli **Accedi**. Usa username o email e password di Training. Al primo invio, completa eventuali passaggi di registrazione e accetta le linee guida sul sito. [Linee guida Olinfo](https://training.olinfo.it/guidelines)
+3. Apri **Olinfo Trainer → Questo problema** nella barra laterale. La scheda mostra il problema collegato a `olinfo.xml`, il miglior punteggio e gli ultimi 20 invii. Scegli **Invia soluzione** e conferma il file e il problema mostrati. In VS Code trovi il comando anche nella palette **Olinfo Trainer**. In JetBrains è in **Tools → Olinfo Trainer**.
+4. Durante la valutazione, il plugin ricontrolla gli invii circa ogni cinque secondi. Il bollino accanto al punteggio usa i colori di Training. Seleziona un invio per aprire i dettagli nel browser, oppure scegli **Tutti gli invii** per lo storico completo.
 
-Il flusso nell’IDE supporta i problemi CMS con un sorgente singolo. Per problemi di solo output o che richiedono più file, usa il modulo sul sito. **Esci dal plugin** rimuove la sessione locale dell’IDE.
+Il badge in basso apre la scheda **Account Olinfo** con username, foto, punti totali, problemi risolti e posizione nella classifica pubblica. La scheda aggiorna i punti periodicamente finché rimane aperta e quando termina un invio monitorato.
+
+Il flusso nell’IDE supporta i problemi CMS con un sorgente singolo. Per problemi di solo output o che richiedono più file, usa il modulo sul sito. **Esci** rimuove la sessione locale dell’IDE.
 
 Per collegare una cartella creata con una versione precedente, aggiungi un `olinfo.xml` alla radice e usa l’identificativo dal sito, il linguaggio (`cpp`, `c`, `py`, `java` o `pas`) e il nome effettivo del sorgente.
 

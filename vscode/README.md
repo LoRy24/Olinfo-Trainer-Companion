@@ -1,6 +1,6 @@
 # Olinfo Trainer Companion
 
-Apri la palette dei comandi e seleziona **Olinfo Trainer: Nuovo problema**. Cerca un problema su [Training Olinfo](https://training.olinfo.it/), scegli la lingua del testo, il linguaggio, il nome del progetto e la cartella di destinazione.
+Apri **Olinfo Trainer → Nuovo problema** nella barra laterale. Cerca un problema su [Training Olinfo](https://training.olinfo.it/), scegli la lingua del testo, il linguaggio, il nome del progetto e la cartella di destinazione.
 
 La scheda crea una nuova cartella con `testo.pdf`, `input.txt`, `output.txt`, il sorgente e gli eventuali allegati per il linguaggio scelto. I file di testo vengono precompilati quando Training pubblica esempi riconoscibili. Scegli **Apri cartella** al termine per aprire il progetto in una nuova finestra.
 
@@ -8,6 +8,8 @@ Per un problema C++ autonomo senza template pubblico, l’estensione genera `<id
 
 L’estensione usa il catalogo pubblico. È supportato VS Code Desktop dalla versione 1.96.
 
-Apri la cartella del problema con `olinfo.xml` alla radice e clicca **Olinfo** nella barra di stato per accedere, inviare il sorgente e vedere il tuo miglior punteggio su Training Olinfo.
+Apri la cartella del problema con `olinfo.xml` alla radice e clicca **Olinfo** nella barra di stato per accedere. La finestra account mostra username, foto, punti totali, problemi risolti e posizione in classifica.
+
+Nella barra laterale, **Questo problema** mostra il sorgente collegato, il miglior punteggio con il colore di Training e gli ultimi invii. Da lì puoi inviare una soluzione e seguirne la valutazione.
 
 Progetto indipendente dalle Olimpiadi Italiane di Informatica. Il logo è un adattamento di quello delle OII. L’attribuzione è inclusa nel pacchetto.

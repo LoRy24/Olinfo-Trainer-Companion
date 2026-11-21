@@ -5,22 +5,38 @@ const { createProject } = require('./project');
 const { registerSubmissions } = require('./submissions');
 
 function activate(context) {
-  registerSubmissions(context);
   let currentPanel;
+  let dashboard;
+  let requestedTab;
+  let accountRequested = false;
+  const show = async () => {
+    if (currentPanel) currentPanel.show(false);
+    else await vscode.commands.executeCommand('olinfoTrainer.workspace.focus');
+  };
+  const submissions = registerSubmissions(context, value => {
+    dashboard = value;
+    void currentPanel?.webview.postMessage({ type: 'dashboard', ...value });
+  }, async () => {
+    accountRequested = true;
+    await show();
+    void currentPanel?.webview.postMessage({ type: 'showAccount' });
+  });
   const client = new TrainingClient();
   const media = vscode.Uri.joinPath(context.extensionUri, 'media');
 
-  context.subscriptions.push(vscode.commands.registerCommand('olinfoTrainer.newProblem', () => {
-    if (currentPanel) {
-      currentPanel.reveal();
-      return;
-    }
-
-    const panel = vscode.window.createWebviewPanel('olinfoTrainer', 'Olinfo Trainer · Nuovo problema',
-      vscode.ViewColumn.One, { enableScripts: true, localResourceRoots: [media], retainContextWhenHidden: true });
+  context.subscriptions.push(vscode.commands.registerCommand('olinfoTrainer.newProblem', async () => {
+    requestedTab = 'new';
+    await show();
+    void currentPanel?.webview.postMessage({ type: 'tab', tab: requestedTab });
+  }));
+  const provider = { resolveWebviewView(panel) {
     currentPanel = panel;
-    panel.onDidDispose(() => { currentPanel = undefined; }, undefined, context.subscriptions);
-    panel.iconPath = vscode.Uri.joinPath(media, 'icon.png');
+    panel.webview.options = { enableScripts: true, localResourceRoots: [media] };
+    panel.onDidDispose(() => { currentPanel = undefined; submissions.setAccountVisible(false); });
+    panel.onDidChangeVisibility(() => {
+      if (!panel.visible) submissions.setAccountVisible(false);
+      else if (accountRequested) void panel.webview.postMessage({ type: 'showAccount' });
+    });
 
     let details;
     let detailsRequest;
@@ -34,8 +50,23 @@ function activate(context) {
           case 'ready': {
             const folder = vscode.workspace.workspaceFolders?.find(item => item.uri.scheme === 'file');
             if (folder) await send('folder', { path: folder.uri.fsPath });
+            if (dashboard) await send('dashboard', dashboard);
+            if (requestedTab) await send('tab', { tab: requestedTab });
+            if (accountRequested) await send('showAccount');
             break;
           }
+          case 'account':
+            accountRequested = message.visible === true;
+            submissions.setAccountVisible(accountRequested);
+            break;
+          case 'submissionAction':
+            if (['login', 'logout', 'submit', 'refreshScore'].includes(message.action)) {
+              await vscode.commands.executeCommand('olinfoTrainer.' + message.action);
+            }
+            break;
+          case 'openTraining':
+            await submissions.open(message.kind, message.id);
+            break;
           case 'search': {
             if (typeof message.query !== 'string' || message.query.length > 200
                 || !Number.isSafeInteger(message.page) || message.page < 1) return;
@@ -90,14 +121,15 @@ function activate(context) {
         const reason = error instanceof Error ? error.message : String(error);
         await send('error', { action: type, requestId, message: reason });
       }
-    }, undefined, context.subscriptions);
+    });
 
     panel.webview.html = readFileSync(vscode.Uri.joinPath(media, 'panel.html').fsPath, 'utf8')
       .replaceAll('{{csp}}', panel.webview.cspSource)
       .replaceAll('{{stylesheet}}', panel.webview.asWebviewUri(vscode.Uri.joinPath(media, 'panel.css')).toString())
-      .replaceAll('{{script}}', panel.webview.asWebviewUri(vscode.Uri.joinPath(media, 'panel.js')).toString())
-      .replaceAll('{{icon}}', panel.webview.asWebviewUri(vscode.Uri.joinPath(media, 'icon.png')).toString());
-  }));
+      .replaceAll('{{script}}', panel.webview.asWebviewUri(vscode.Uri.joinPath(media, 'panel.js')).toString());
+  }};
+  context.subscriptions.push(vscode.window.registerWebviewViewProvider('olinfoTrainer.workspace', provider,
+    { webviewOptions: { retainContextWhenHidden: true } }));
 }
 
 module.exports = { activate };

@@ -13,19 +13,20 @@ import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.wm.WindowManager;
-import com.intellij.ui.awt.RelativePoint;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 @Service(Service.Level.PROJECT)
@@ -33,13 +34,26 @@ public final class SubmissionUi implements Disposable {
     private static final CredentialAttributes SESSION = new CredentialAttributes("Olinfo Trainer Companion / training.olinfo.it");
 
     private record Pending(String task, String id, String session, long until) {}
-    record Snapshot(String text, String tooltip, String task, String newestId) {}
+    record Snapshot(String text, String tooltip, String color) {}
+    record Problem(ProjectLink link, String title, String mode, SubmissionClient.Results results,
+                   boolean waiting, boolean signedOut, String message) {}
+    record Account(String user, AccountData.Profile profile, BufferedImage photo, Integer rank,
+                   boolean ranking, boolean signedOut, String message) {}
 
     private final Project project;
     private final SubmissionClient api = new SubmissionClient();
     private final AtomicBoolean refreshing = new AtomicBoolean();
     private final java.util.concurrent.ScheduledFuture<?> timer;
-    private volatile Snapshot snapshot = new Snapshot("", "", null, null);
+    private final AtomicBoolean loadingAccount = new AtomicBoolean();
+    private final CopyOnWriteArrayList<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private volatile Snapshot snapshot = new Snapshot("", "", "");
+    private volatile Problem problem;
+    private volatile Account account;
+    private volatile String accountSession;
+    private volatile long rankUntil;
+    private volatile long nextAccount;
+    private volatile long accountGeneration;
+    private volatile boolean accountVisible;
     private volatile Pending pending;
     private volatile long nextRefresh;
     private volatile boolean disposed;
@@ -48,10 +62,21 @@ public final class SubmissionUi implements Disposable {
     public SubmissionUi(Project project) {
         this.project = project;
         timer = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(
-                () -> refresh(false), 1, 5, TimeUnit.SECONDS);
+                () -> {
+                    refresh(false);
+                    if (accountVisible && System.currentTimeMillis() >= nextAccount) refreshAccount();
+                }, 1, 5, TimeUnit.SECONDS);
     }
 
     Snapshot snapshot() { return snapshot; }
+    Problem problem() { return problem; }
+    Account account() { return account; }
+
+    void listen(Disposable lifetime, Runnable listener) {
+        listeners.add(listener);
+        Disposer.register(lifetime, () -> listeners.remove(listener));
+        listener.run();
+    }
 
     private ProjectLink projectLink() throws IOException {
         String base = project.getBasePath();
@@ -62,12 +87,29 @@ public final class SubmissionUi implements Disposable {
         if (immediate) nextRefresh = 0;
         if (disposed || System.currentTimeMillis() < nextRefresh || !refreshing.compareAndSet(false, true)) return;
         AppExecutorUtil.getAppExecutorService().execute(() -> {
+            ProjectLink link = null;
+            String title = null;
+            String mode = null;
             try {
                 nextRefresh = System.currentTimeMillis() + 45_000;
-                ProjectLink link = projectLink();
+                link = projectLink();
                 if (link == null) {
-                    publish(new Snapshot("", "", null, null));
+                    problem = null;
+                    publish(new Snapshot("", "", ""));
                     return;
+                }
+                Problem previous = problem;
+                if (previous != null && previous.link().task().equals(link.task()) && previous.title() != null) {
+                    title = previous.title();
+                    mode = previous.mode();
+                } else {
+                    try {
+                        var meta = TrainingClient.taskPage(api.page("/task/" + link.task(), null));
+                        title = meta.title();
+                        mode = meta.mode();
+                    } catch (IOException ignored) {
+                        // The task ID still identifies the project if metadata is unavailable.
+                    }
                 }
                 String session = PasswordSafe.getInstance().getPassword(SESSION);
                 var result = api.results(link.task(), session);
@@ -79,16 +121,24 @@ public final class SubmissionUi implements Disposable {
                 if (waiting && (!same || System.currentTimeMillis() < tracking.until())) {
                     nextRefresh = System.currentTimeMillis() + 5_000;
                 }
-                if (same && latest != null && !latest.pending()) pending = null;
+                if (same && latest != null && !latest.pending()) {
+                    pending = null;
+                    if (accountVisible) refreshAccount();
+                } else if (same && latest == null && !waiting) pending = null;
                 String best = result.best() == null ? "—" : result.best() + " pt";
                 String tooltip = link.task() + " · Miglior punteggio: " + best
                         + (latest == null ? "" : " · Ultimo invio #" + latest.id() + " · " + latest.outcome());
-                publish(new Snapshot("Olinfo " + best + (waiting ? " · in corso" : ""), tooltip,
-                        link.task(), latest == null ? null : latest.id()));
+                String color = result.best() == null ? "" : result.rows().stream()
+                        .filter(row -> result.best().equals(row.score()))
+                        .findFirst().map(row -> AccountData.scoreColor(row.score(), row.color())).orElse("");
+                problem = new Problem(link, title, mode, result, waiting, false, null);
+                publish(new Snapshot("Olinfo " + best + (waiting ? " · in corso" : ""), tooltip, color));
             } catch (SubmissionClient.LoginRequired exception) {
-                publish(new Snapshot("Olinfo · Accedi", exception.getMessage(), null, null));
+                if (link != null) problem = new Problem(link, title, mode, null, false, true, null);
+                publish(new Snapshot("Olinfo · Accedi", exception.getMessage(), ""));
             } catch (Exception exception) {
-                publish(new Snapshot("Olinfo · Errore", message(exception), null, null));
+                problem = link == null ? null : new Problem(link, title, mode, null, false, false, message(exception));
+                publish(new Snapshot("Olinfo · Errore", message(exception), ""));
             } finally {
                 refreshing.set(false);
             }
@@ -98,11 +148,72 @@ public final class SubmissionUi implements Disposable {
     private void publish(Snapshot value) {
         if (disposed) return;
         snapshot = value;
+        notifyViews();
+    }
+
+    private void notifyViews() {
         ApplicationManager.getApplication().invokeLater(() -> {
             if (disposed || project.isDisposed()) return;
             var bar = WindowManager.getInstance().getStatusBar(project);
             if (bar != null) bar.updateWidget(OlinfoScoreWidget.ID);
+            for (Runnable listener : listeners) listener.run();
         });
+    }
+
+    private void refreshAccount() {
+        if (disposed || !loadingAccount.compareAndSet(false, true)) return;
+        long generation = accountGeneration;
+        nextAccount = System.currentTimeMillis() + 25_000;
+        AppExecutorUtil.getAppExecutorService().execute(() -> {
+            try {
+                String session = PasswordSafe.getInstance().getPassword(SESSION);
+                if (session == null) throw new SubmissionClient.LoginRequired();
+                Account previous = session.equals(accountSession) ? account : null;
+                String username = previous == null ? null : previous.user();
+                if (username == null) username = AccountData.username(api.page("/", session));
+                if (username == null) throw new SubmissionClient.LoginRequired();
+                var metrics = AccountData.profile(api.page("/user/" + username, null));
+                boolean samePhoto = previous != null && previous.profile() != null
+                        && java.util.Objects.equals(previous.profile().avatar(), metrics.avatar());
+                var photo = samePhoto ? previous.photo() : AccountData.photo(metrics.avatar());
+                boolean updateRank = previous == null || previous.profile() == null
+                        || previous.profile().points() != metrics.points() || System.currentTimeMillis() >= rankUntil;
+                if (generation != accountGeneration || disposed) return;
+                accountSession = session;
+                account = new Account(username, metrics, photo, updateRank ? null : previous.rank(),
+                        updateRank && metrics.points() > 0, false, null);
+                notifyViews();
+                if (updateRank && metrics.points() > 0) {
+                    Integer rank;
+                    try {
+                        rank = AccountData.rank(location -> api.page(location, null), username, metrics.points());
+                    } catch (IOException ignored) {
+                        rank = null;
+                    }
+                    if (generation != accountGeneration || disposed) return;
+                    account = new Account(username, metrics, photo, rank, false, false, null);
+                    rankUntil = System.currentTimeMillis() + (rank == null ? 60_000 : 180_000);
+                }
+            } catch (Exception exception) {
+                if (generation == accountGeneration) {
+                    account = new Account(null, null, null, null, false,
+                            exception instanceof SubmissionClient.LoginRequired, message(exception));
+                }
+            } finally {
+                loadingAccount.set(false);
+                if (generation == accountGeneration && !disposed) notifyViews();
+            }
+        });
+    }
+
+    private void resetAccount() {
+        ++accountGeneration;
+        account = null;
+        accountSession = null;
+        rankUntil = 0;
+        nextAccount = 0;
+        if (accountVisible) refreshAccount();
+        notifyViews();
     }
 
     void login() { promptLogin(session -> refresh(true)); }
@@ -119,6 +230,7 @@ public final class SubmissionUi implements Disposable {
             return session;
         }, session -> {
             pending = null;
+            resetAccount();
             continuation.accept(session);
         });
     }
@@ -129,6 +241,7 @@ public final class SubmissionUi implements Disposable {
             return null;
         }, ignored -> {
             pending = null;
+            resetAccount();
             refresh(true);
         });
     }
@@ -173,28 +286,28 @@ public final class SubmissionUi implements Disposable {
 
     void menu(MouseEvent event) {
         if (disposed || event == null) return;
-        record Action(String name, Runnable run) { @Override public String toString() { return name; } }
-        var actions = new java.util.ArrayList<>(List.of(
-                new Action("Invia soluzione", this::submit),
-                new Action("Aggiorna punteggio", () -> refresh(true)),
-                new Action("Accedi a Training Olinfo", this::login),
-                new Action("Esci dal plugin", this::logout)));
-        try {
-            ProjectLink link = projectLink();
-            if (link != null) {
-                String url = TrainingClient.ORIGIN + SubmissionClient.pathFor(link.task(), "submissions");
-                actions.add(new Action("Apri gli invii sul sito", () -> BrowserUtil.browse(url)));
-                Snapshot current = snapshot;
-                if (link.task().equals(current.task()) && current.newestId() != null) {
-                    actions.add(new Action("Apri l’invio #" + current.newestId(), () -> BrowserUtil.browse(url + "/" + current.newestId())));
-                }
-            }
-        } catch (IOException ignored) {
-            // The status tooltip shows the manifest error.
-        }
-        JBPopupFactory.getInstance().createPopupChooserBuilder(actions)
-                .setTitle("Training Olinfo").setItemChosenCallback(action -> action.run().run())
-                .createPopup().show(new RelativePoint(event));
+        var panel = new OlinfoDashboard.AccountPanel(this);
+        var popup = JBPopupFactory.getInstance().createComponentPopupBuilder(panel, null)
+                .setTitle("Account Olinfo").setMovable(true).setRequestFocus(true).createPopup();
+        listen(popup, panel::render);
+        accountVisible = true;
+        Disposer.register(popup, () -> accountVisible = false);
+        var anchor = event.getComponent();
+        var point = anchor.getLocationOnScreen();
+        var size = panel.getPreferredSize();
+        point.translate(anchor.getWidth() - size.width, -size.height - 36);
+        popup.showInScreenCoordinates(anchor, point);
+        refreshAccount();
+    }
+
+    void openProfile() {
+        Account current = account;
+        if (current != null && current.user() != null) BrowserUtil.browse(TrainingClient.ORIGIN + "/user/" + current.user());
+    }
+
+    void openTask(String suffix) {
+        Problem current = problem;
+        if (current != null) BrowserUtil.browse(TrainingClient.ORIGIN + "/task/" + current.link().task() + suffix);
     }
 
     private <T> void run(String title, Callable<T> operation, Consumer<T> success) {

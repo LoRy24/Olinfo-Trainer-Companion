@@ -1,22 +1,67 @@
 const vscode = require('vscode');
 const { readProject, readSource } = require('./project-link');
 const { LoginRequired, SubmissionClient, origin } = require('./submission-client');
+const { scoreColor } = require('./account');
+const { taskPage } = require('./training');
+
+const palette = { red: '#f87171', orange: '#fb923c', yellow: '#facc15', lime: '#a3e635', green: '#4ade80' };
 
 const key = 'olinfo.training.session';
 const historyPath = link => origin + '/task/' + link.task + '/submissions';
 const errorMessage = error => error instanceof Error ? error.message : 'Operazione non riuscita.';
 
-function registerSubmissions(context) {
+function registerSubmissions(context, onChange, openAccount) {
   const api = new SubmissionClient();
   const item = vscode.window.createStatusBarItem('olinfoTrainer.score', vscode.StatusBarAlignment.Right, 30);
   item.command = 'olinfoTrainer.submissionMenu';
   let working = false;
   let refreshId = 0;
   let nextRefresh = 0;
-  let latest;
   let needsLogin = false;
   let activeRoot;
   const monitored = new Map();
+  let current;
+  let account;
+  let accountVisible = false;
+  let accountRequest = 0;
+  let nextAccount = 0;
+  let cachedSession;
+  let accountBusy = false;
+  let problemMeta;
+  const publish = () => onChange({ problem: current, account });
+
+  async function refreshAccount(force = false) {
+    if (accountBusy || (!force && (!accountVisible || Date.now() < nextAccount))) return;
+    accountBusy = true;
+    const id = ++accountRequest;
+    nextAccount = Date.now() + 25_000;
+    try {
+      const session = await context.secrets.get(key);
+      const previous = session === cachedSession && account?.username ? account : undefined;
+      const username = previous?.username || await api.username(session);
+      const details = await api.profile(username);
+      if (id !== accountRequest) return;
+      cachedSession = session;
+      const updateRank = !previous || previous.points !== details.points || Date.now() >= (previous.rankUntil || 0);
+      account = { username, ...details, rank: updateRank ? undefined : previous.rank,
+        rankUntil: updateRank ? Date.now() + 180_000 : previous.rankUntil, ranking: updateRank && details.points > 0 };
+      publish();
+      if (updateRank && details.points > 0) {
+        const rank = await api.rank(username, details.points).catch(() => undefined);
+        if (id !== accountRequest) return;
+        account = { ...account, rank, ranking: false,
+          rankUntil: rank === undefined ? Date.now() + 60_000 : account.rankUntil };
+      }
+    } catch (error) {
+      if (id !== accountRequest) return;
+      account = { signedOut: error instanceof LoginRequired, error: errorMessage(error) };
+    } finally {
+      accountBusy = false;
+      if (id === accountRequest) publish();
+    }
+  }
+
+  const setProblem = value => { current = value; publish(); };
 
   function rootFolder() {
     const editor = vscode.window.activeTextEditor?.document.uri;
@@ -35,23 +80,31 @@ function registerSubmissions(context) {
     if (!force && Date.now() < nextRefresh) return;
     nextRefresh = Date.now() + 45_000;
     const id = ++refreshId;
+    let problem;
     try {
       const link = await project();
       if (id !== refreshId) return;
       if (!link) {
         item.hide();
-        latest = undefined;
+        setProblem(undefined);
         return;
       }
+      if (problemMeta?.task !== link.task || !problemMeta.title) {
+        const meta = await api.page('/task/' + link.task).then(taskPage).catch(() => undefined);
+        if (id !== refreshId) return;
+        problemMeta = { task: link.task, title: meta?.title, mode: meta?.mode };
+      }
+      problem = { ...problemMeta, language: link.language, source: link.source };
       item.name = 'Punteggio Olinfo';
       item.tooltip = link.task + ' · Comandi Olinfo';
       const session = await context.secrets.get(key);
       if (id !== refreshId) return;
       if (!session) {
         needsLogin = true;
-        latest = undefined;
         item.text = '$(sign-in) Olinfo';
+        item.color = undefined;
         item.show();
+        setProblem({ ...problem, signedOut: true });
         return;
       }
       const result = await api.results(link.task, session);
@@ -61,28 +114,33 @@ function registerSubmissions(context) {
       const tracked = previous && result.rows.find(row => row.id === previous.id);
       const expired = previous && Date.now() >= previous.until;
       const submission = tracked || (!previous || expired ? result.rows[0] : undefined);
-      latest = { root: link.root, submission };
       const waiting = (previous && !tracked && !expired) || submission?.pending;
       if (waiting && (!previous || Date.now() < previous.until)) nextRefresh = Date.now() + 5_000;
       if (tracked && !tracked.pending) {
         monitored.delete(link.root);
         void vscode.window.showInformationMessage('Olinfo #' + tracked.id + ' · ' + tracked.outcome
           + (tracked.score !== undefined ? ' pt' : ''));
+        if (accountVisible) void refreshAccount(true);
       } else if (expired && !tracked) {
         monitored.delete(link.root);
       }
       const best = result.best === undefined ? '—' : result.best + ' pt';
-      item.text = (waiting ? '$(sync~spin)' : '$(trophy)') + ' Olinfo ' + best;
+      const color = result.rows.find(row => row.score !== undefined && row.score === result.best)?.color ?? scoreColor(result.best);
+      item.text = (waiting ? '$(sync~spin)' : '$(circle-filled)') + ' Olinfo ' + best;
+      item.color = palette[color];
       item.tooltip = link.task + ' · Miglior punteggio: ' + best
         + (submission ? '\nUltimo invio #' + submission.id + ' · ' + submission.outcome : '');
       item.show();
+      const rows = result.rows.slice(0, 20).map(row => ({ ...row, color: row.color ?? scoreColor(row.score) }));
+      setProblem({ ...problem, color, best: result.best, waiting: !!waiting, rows });
     } catch (error) {
       if (id !== refreshId) return;
-      latest = undefined;
       if (error instanceof LoginRequired) needsLogin = true;
       item.text = error instanceof LoginRequired ? '$(sign-in) Olinfo' : '$(warning) Olinfo';
+      item.color = undefined;
       item.tooltip = errorMessage(error);
       item.show();
+      setProblem(problem && { ...problem, signedOut: error instanceof LoginRequired, error: errorMessage(error) });
     }
   }
 
@@ -147,32 +205,11 @@ function registerSubmissions(context) {
     logout: () => run(async () => { await context.secrets.delete(key); monitored.clear(); await refresh(true); }),
     submit: () => run(submit),
     refreshScore: () => refresh(true),
-    submissionMenu: async () => {
-      try {
-        const link = await project();
-        if (!link) return;
-        const session = await context.secrets.get(key);
-        const actions = [
-          ...(link.source ? [{ label: 'Invia soluzione', command: 'submit' }] : []),
-          { label: 'Aggiorna punteggio', command: 'refreshScore' },
-          ...(!session || needsLogin ? [{ label: 'Accedi a Training Olinfo', command: 'login' }] : []),
-          ...(session ? [{ label: 'Esci dal plugin', command: 'logout' }] : []),
-          { label: 'Apri gli invii sul sito', url: historyPath(link) },
-        ];
-        if (latest?.root === link.root && latest.submission) {
-          actions.push({ label: 'Apri l’invio #' + latest.submission.id, url: historyPath(link) + '/' + latest.submission.id });
-        }
-        const action = await vscode.window.showQuickPick(actions, { title: 'Olinfo · ' + link.task });
-        if (action?.command) await commands[action.command]();
-        if (action?.url) await vscode.env.openExternal(vscode.Uri.parse(action.url));
-      } catch (error) {
-        void vscode.window.showErrorMessage(errorMessage(error));
-      }
-    },
+    submissionMenu: openAccount,
   };
 
   const watcher = vscode.workspace.createFileSystemWatcher('**/olinfo.xml');
-  const timer = setInterval(() => void refresh(), 5000);
+  const timer = setInterval(() => { void refresh(); void refreshAccount(); }, 5000);
   context.subscriptions.push(item, watcher, { dispose: () => { ++refreshId; clearInterval(timer); } },
     watcher.onDidCreate(() => void refresh(true)), watcher.onDidChange(() => void refresh(true)),
     watcher.onDidDelete(() => void refresh(true)), vscode.workspace.onDidGrantWorkspaceTrust(() => void refresh(true)),
@@ -183,10 +220,35 @@ function registerSubmissions(context) {
       activeRoot = root;
       void refresh(true);
     }),
-    context.secrets.onDidChange(event => { if (event.key === key) void refresh(true); }),
+    context.secrets.onDidChange(event => {
+      if (event.key !== key) return;
+      ++accountRequest;
+      nextAccount = 0;
+      cachedSession = undefined;
+      account = undefined;
+      publish();
+      if (accountVisible) void refreshAccount(true);
+      void refresh(true);
+    }),
     ...Object.entries(commands).map(([name, run]) => vscode.commands.registerCommand('olinfoTrainer.' + name, run)));
   activeRoot = rootFolder()?.uri.fsPath;
   void refresh(true);
+  return {
+    setAccountVisible(visible) { accountVisible = visible; if (visible) void refreshAccount(true); },
+    async open(kind, id) {
+      if (kind === 'profile' && account?.username) {
+        await vscode.env.openExternal(vscode.Uri.parse(origin + '/user/' + encodeURIComponent(account.username)));
+        return;
+      }
+      const link = await project();
+      if (!link) return;
+      if (kind === 'history') await vscode.env.openExternal(vscode.Uri.parse(historyPath(link)));
+      if (kind === 'problem') await vscode.env.openExternal(vscode.Uri.parse(origin + '/task/' + link.task));
+      if (kind === 'row' && typeof id === 'string' && /^[1-9]\d*$/.test(id)) {
+        await vscode.env.openExternal(vscode.Uri.parse(historyPath(link) + '/' + id));
+      }
+    },
+  };
 }
 
 module.exports = { registerSubmissions };

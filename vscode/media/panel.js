@@ -11,6 +11,88 @@ let hasNext = false;
 let searching = false;
 let creating = false;
 
+function selectTab(tab) {
+  const isNew = tab === 'new';
+  ui['tab-new'].setAttribute('aria-pressed', String(isNew));
+  ui['tab-current'].setAttribute('aria-pressed', String(!isNew));
+  ui['new-pane'].hidden = !isNew;
+  ui['current-pane'].hidden = isNew;
+}
+
+function action(name) { vscode.postMessage({ type: 'submissionAction', action: name }); }
+function openTraining(kind, id) { vscode.postMessage({ type: 'openTraining', kind, id }); }
+
+const format = value => new Intl.NumberFormat('it-IT').format(value);
+const safeColor = color => ['red', 'orange', 'yellow', 'lime', 'green'].includes(color) ? color : 'neutral';
+
+function renderDashboard({ account, problem }) {
+  ui['current-title'].textContent = problem?.title || problem?.task || 'Questo problema';
+  ui['current-info'].textContent = problem
+    ? [problem.task, problem.language?.toUpperCase(), problem.source, problem.mode].filter(Boolean).join(' · ')
+    : 'Apri una cartella con olinfo.xml.';
+  ui['current-score'].hidden = !problem?.rows;
+  ui['current-score'].textContent = problem?.best === undefined ? 'Migliore · —' : 'Migliore · ' + format(problem.best) + ' pt';
+  ui['current-score'].dataset.color = safeColor(problem?.color);
+  ui['current-open'].disabled = !problem?.task;
+  ui['current-submit'].disabled = !problem?.source;
+  ui['current-login'].hidden = !problem?.signedOut;
+  ui['current-history'].hidden = !problem?.task;
+  status(ui['current-message'], problem?.error || (problem?.signedOut ? 'Accedi per vedere i tuoi invii.'
+    : problem?.waiting ? 'Valutazione in corso…' : problem?.rows?.length === 0 ? 'Nessun invio.' : ''));
+  ui['current-results'].replaceChildren();
+  for (const row of problem?.rows || []) {
+    const entry = document.createElement('li');
+    const button = document.createElement('button');
+    button.className = 'secondary';
+    const number = document.createElement('span');
+    number.textContent = '#' + row.id;
+    const outcome = document.createElement('span');
+    outcome.className = 'score';
+    outcome.dataset.color = safeColor(row.color);
+    outcome.textContent = row.score === undefined ? row.outcome : row.score + ' pt';
+    button.append(number, outcome);
+    button.addEventListener('click', () => openTraining('row', row.id));
+    entry.append(button);
+    ui['current-results'].append(entry);
+  }
+
+  const signedIn = !!account?.username;
+  ui['account-details'].hidden = !signedIn;
+  ui['account-profile'].hidden = !signedIn;
+  ui['account-logout'].hidden = !signedIn;
+  ui['account-login'].hidden = !account?.signedOut;
+  ui['account-message'].textContent = account?.error || (!account ? 'Caricamento account…' : '');
+  if (signedIn) {
+    ui['account-user'].textContent = '@' + account.username;
+    ui['avatar-initials'].textContent = account.username.slice(0, 2).toUpperCase();
+    ui['account-points'].textContent = format(account.points);
+    ui['account-solved'].textContent = format(account.solved);
+    ui['account-rank'].textContent = account.ranking ? '…' : account.rank ? '#' + format(account.rank) : '—';
+    const photo = ui['avatar-photo'];
+    if (photo.getAttribute('src') !== (account.avatar ?? null)) {
+      photo.hidden = true;
+      ui['avatar-initials'].hidden = false;
+      if (account.avatar) photo.setAttribute('src', account.avatar);
+      else photo.removeAttribute('src');
+    }
+  }
+}
+
+ui['avatar-photo'].addEventListener('load', () => { ui['avatar-photo'].hidden = false; ui['avatar-initials'].hidden = true; });
+ui['avatar-photo'].addEventListener('error', () => { ui['avatar-photo'].hidden = true; ui['avatar-initials'].hidden = false; });
+ui['tab-new'].addEventListener('click', () => selectTab('new'));
+ui['tab-current'].addEventListener('click', () => selectTab('current'));
+ui['account-close'].addEventListener('click', () => ui['account-dialog'].close());
+ui['account-dialog'].addEventListener('close', () => vscode.postMessage({ type: 'account', visible: false }));
+ui['account-login'].addEventListener('click', () => action('login'));
+ui['account-logout'].addEventListener('click', () => action('logout'));
+ui['account-profile'].addEventListener('click', () => openTraining('profile'));
+ui['current-login'].addEventListener('click', () => action('login'));
+ui['current-submit'].addEventListener('click', () => action('submit'));
+ui['current-refresh'].addEventListener('click', () => action('refreshScore'));
+ui['current-open'].addEventListener('click', () => openTraining('problem'));
+ui['current-history'].addEventListener('click', () => openTraining('history'));
+
 function status(element, text, error = false) {
   element.textContent = text;
   element.classList.toggle('error', error);
@@ -87,6 +169,16 @@ ui.project.addEventListener('submit', event => {
 window.addEventListener('message', event => {
   const message = event.data;
   switch (message.type) {
+    case 'dashboard':
+      renderDashboard(message);
+      break;
+    case 'tab':
+      selectTab(message.tab);
+      break;
+    case 'showAccount':
+      if (!ui['account-dialog'].open) ui['account-dialog'].showModal();
+      vscode.postMessage({ type: 'account', visible: true });
+      break;
     case 'folder':
       ui.parent.value = message.path;
       break;

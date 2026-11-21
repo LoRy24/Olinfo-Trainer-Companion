@@ -5,9 +5,40 @@ const os = require('node:os');
 const path = require('node:path');
 const { projectXml, readProject, readSource } = require('../src/project-link');
 const { SubmissionClient, LoginRequired, submissionList, submitOptions } = require('../src/submission-client');
+const { scoreColor } = require('../src/account');
 
 const fixture = file => fs.readFile(path.join(__dirname, '../../shared/fixtures', file), 'utf8');
 const cookie = '__Secure-better-auth.session_token=mock-token.test%2Bsignature';
+
+test('legge account, avatar e posizione anche a parità di punti su due pagine', async () => {
+  const html = await fixture('profile.html');
+  const row = (user, rank, points) => '<li><a href="/user/' + user + '"><div><div>' + rank
+    + '</div></div><div>' + points + '</div></a></li>';
+  const pages = {
+    '/ranking/1': '<a href="/ranking/3?">Ultima</a><ul>' + row('prima', 1, 400) + '</ul>',
+    '/ranking/2': '<ul>' + row('seconda', 2, 275) + '</ul>',
+    '/ranking/3': '<ul>' + row('Fixture.User', 3, 275) + row('quarta', 4, 120) + '</ul>',
+  };
+  const client = new SubmissionClient(async (url, request) => {
+    assert.equal(url.origin, 'https://training.olinfo.it');
+    assert.equal(request.headers.Cookie, url.pathname === '/' ? 'lang=it-IT; ' + cookie : 'lang=it-IT');
+    if (url.pathname === '/' || url.pathname === '/user/Fixture.User') return new Response(html);
+    assert.ok(pages[url.pathname]);
+    return new Response(pages[url.pathname]);
+  });
+
+  const username = await client.username(cookie);
+  assert.equal(username, 'Fixture.User');
+  assert.deepEqual(await client.profile(username), {
+    points: 275, solved: 14, avatar: 'https://www.gravatar.com/avatar/demo?s=256',
+  });
+  assert.equal(await client.rank(username, 275), 3);
+  assert.equal(await client.rank('assente', 275), undefined);
+  assert.equal(await client.rank(username, 0), undefined);
+  assert.deepEqual([0, 25, 50, 75, 100].map(scoreColor), ['red', 'orange', 'yellow', 'lime', 'green']);
+  const results = submissionList(await fixture('submissions.html'), 'demo');
+  assert.equal(results.rows[1].color, 'red');
+});
 
 test('i metadati indicano il sorgente e rifiutano percorsi al di fuori del progetto', async t => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'olinfo-manifest-'));

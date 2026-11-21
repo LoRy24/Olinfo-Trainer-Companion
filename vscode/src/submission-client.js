@@ -1,5 +1,6 @@
 const { load } = require('cheerio/slim');
 const { taskId } = require('./project-link');
+const { accountUsername, profile, rankFor } = require('./account');
 
 const origin = 'https://training.olinfo.it';
 const sessionCookie = /^(?:__Secure-)?better-auth\.session_token=[A-Za-z0-9._%+~\/=-]+$/;
@@ -62,10 +63,12 @@ function submissionList(html, task) {
     if (!href.startsWith(prefix)) continue;
     const id = href.slice(prefix.length);
     if (!/^[1-9]\d*$/.test(id)) continue;
-    const outcome = $(node).children().last().text().trim();
+    const cell = $(node).children().last();
+    const outcome = cell.text().trim();
     if (!outcome) continue;
     const score = /^\d{1,9}$/.test(outcome) ? Number(outcome) : undefined;
-    rows.push({ id, outcome, score, pending: /in corso/i.test(outcome) });
+    const color = (cell.find('span').first().attr('class') || '').match(/\bbg-(red|orange|yellow|lime|green)-400\b/)?.[1];
+    rows.push({ id, outcome, score, color, pending: /in corso/i.test(outcome) });
   }
   if (!rows.length) {
     $('script').remove();
@@ -144,6 +147,21 @@ class SubmissionClient {
   async results(task, session) {
     if (!session) throw new LoginRequired();
     return submissionList(await this.page(pathFor(task, 'submissions'), session), task);
+  }
+
+  async username(session) {
+    if (!session) throw new LoginRequired();
+    const username = accountUsername(await this.page('/', session));
+    if (!username) throw new LoginRequired();
+    return username;
+  }
+
+  async profile(username) {
+    return profile(await this.page('/user/' + encodeURIComponent(username)));
+  }
+
+  async rank(username, points) {
+    return rankFor(location => this.page(location), username, points);
   }
 
   async submit(link, source, session) {
