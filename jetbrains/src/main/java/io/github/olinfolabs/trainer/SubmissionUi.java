@@ -5,12 +5,15 @@ import com.intellij.ide.BrowserUtil;
 import com.intellij.ide.impl.TrustedProjects;
 import com.intellij.ide.passwordSafe.PasswordSafe;
 import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationAction;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
@@ -20,12 +23,16 @@ import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.wm.WindowManager;
 import com.intellij.ui.components.JBLabel;
+import com.intellij.ui.components.JBScrollPane;
+import com.intellij.ui.components.JBTextArea;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.awt.Component;
 import javax.swing.JComponent;
+import javax.swing.Action;
+import javax.swing.AbstractAction;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -40,6 +47,7 @@ public final class SubmissionUi implements Disposable {
     private static final CredentialAttributes SESSION = new CredentialAttributes("Olinfo Trainer Companion / training.olinfo.it");
 
     private record Pending(String task, String id, String session, long until) {}
+    private record TerrySubmission(String id, TerryClient.Report report) {}
     record Snapshot(String text, String tooltip, String color) {}
     record Problem(ProjectLink link, String title, String mode, SubmissionClient.Results results,
                    boolean waiting, boolean signedOut, String message) {}
@@ -48,6 +56,7 @@ public final class SubmissionUi implements Disposable {
 
     private final Project project;
     private final SubmissionClient api = new SubmissionClient();
+    private final TerryClient terry = new TerryClient(api, TrainingClient::download);
     private final AtomicBoolean refreshing = new AtomicBoolean();
     private final java.util.concurrent.ScheduledFuture<?> timer;
     private final AtomicBoolean loadingAccount = new AtomicBoolean();
@@ -117,7 +126,7 @@ public final class SubmissionUi implements Disposable {
                     mode = previous.mode();
                 } else {
                     try {
-                        var meta = TrainingClient.taskPage(api.page("/task/" + link.task(), null));
+                        var meta = TrainingClient.taskPage(api.page("/task/" + link.task(), null), link.task());
                         title = meta.title();
                         mode = meta.mode();
                     } catch (IOException ignored) {
@@ -305,6 +314,10 @@ public final class SubmissionUi implements Disposable {
         }
         submitting = true;
         notifyViews();
+        if (ProjectLink.isTerry(link.task())) {
+            sendTerry(link, session);
+            return;
+        }
         run("Invio della soluzione a Olinfo", () -> api.submit(link, link.readSource(), session), id -> {
             pending = new Pending(link.task(), id, session, System.currentTimeMillis() + 120_000);
             NotificationGroupManager.getInstance().getNotificationGroup("Olinfo Trainer")
@@ -314,11 +327,89 @@ public final class SubmissionUi implements Disposable {
         });
     }
 
+    private void sendTerry(ProjectLink link, String session) {
+        run("Esecuzione e invio Territoriali", () -> {
+            var indicator = ProgressManager.getInstance().getProgressIndicator();
+            Consumer<String> progress = text -> { if (indicator != null) indicator.setText2(text); };
+            byte[] source = link.readSource();
+            var result = TerryRunner.run(link, source, () -> terry.input(link.task(), session), progress,
+                    Path.of(PathManager.getBinPath(), "mingw", "bin"));
+            progress.accept("Caricamento di sorgente e output…");
+            String id = terry.submit(link, result.input(), source, result.output(), session);
+            try {
+                return new TerrySubmission(id, terry.result(link.task(), id, session));
+            } catch (IOException exception) {
+                return new TerrySubmission(id, null);
+            }
+        }, submission -> {
+            var report = submission.report();
+            String id = submission.id();
+            String summary = report == null ? "Training Olinfo ha ricevuto l’invio #" + id.split("-", 2)[0] + "." : report.summary();
+            var notification = NotificationGroupManager.getInstance().getNotificationGroup("Olinfo Trainer")
+                    .createNotification(summary, NotificationType.INFORMATION);
+            notification.addAction(NotificationAction.createSimple("Vedi dettagli", () -> {
+                if (report == null) loadTerryReport(link.task(), id);
+                else showTerryReport(link.task(), id, report);
+            }));
+            notification.notify(project);
+            refresh(true);
+            if (accountVisible) refreshAccount();
+        });
+    }
+
+    void openSubmission(String id) {
+        var current = problem;
+        if (current == null) return;
+        if (ProjectLink.isTerry(current.link().task())) loadTerryReport(current.link().task(), id);
+        else openTask("/submissions/" + id);
+    }
+
+    private void loadTerryReport(String task, String id) {
+        run("Dettagli della valutazione Territoriali", () -> terry.result(task, id, PasswordSafe.getInstance().getPassword(SESSION)),
+                report -> showTerryReport(task, id, report));
+    }
+
+    private void showTerryReport(String task, String id, TerryClient.Report report) {
+        new DialogWrapper(project) {
+            {
+                setTitle("Territoriali · " + report.summary());
+                setOKButtonText("Chiudi");
+                init();
+            }
+
+            @Override protected Action @NotNull [] createActions() {
+                return new Action[]{new AbstractAction("Apri invio su Training") {
+                    @Override public void actionPerformed(java.awt.event.ActionEvent event) {
+                        BrowserUtil.browse(TrainingClient.ORIGIN + "/task/" + task + "/submissions/" + id);
+                    }
+                }, getOKAction()};
+            }
+
+            @Override protected JComponent createCenterPanel() {
+                var message = new StringBuilder();
+                if (report.cases().isEmpty()) message.append("Nessun caso valutato.\n");
+                for (var item : report.cases()) {
+                    message.append("Case #").append(item.number()).append(" · ").append(item.outcome());
+                    if (!item.detail().isBlank()) message.append(" · ").append(item.detail());
+                    message.append('\n');
+                }
+                if (!report.notes().isEmpty()) message.append('\n').append(String.join("\n", report.notes()));
+                var results = new JBTextArea(message.toString(), Math.clamp(report.cases().size() + 2, 8, 22), 62);
+                results.setEditable(false);
+                results.setLineWrap(true);
+                results.setWrapStyleWord(true);
+                results.setCaretPosition(0);
+                return new JBScrollPane(results);
+            }
+        }.show();
+    }
+
     private boolean confirmSubmission(ProjectLink link, String title) {
+        boolean regional = ProjectLink.isTerry(link.task());
         return new DialogWrapper(project) {
             {
-                setTitle("Invia soluzione");
-                setOKButtonText("Invia a Training");
+                setTitle(regional ? "Esegui e invia la soluzione Territoriali" : "Invia soluzione");
+                setOKButtonText(regional ? "Esegui e invia" : "Invia a Training");
                 setCancelButtonText("Annulla");
                 init();
             }
@@ -330,7 +421,8 @@ public final class SubmissionUi implements Disposable {
                         .addLabeledComponent("Problema", task)
                         .addLabeledComponent("Sorgente", new JBLabel(link.source()))
                         .addLabeledComponent("Linguaggio", new JBLabel(TrainingClient.languageLabel(link.language())))
-                        .addComponent(new JBLabel("Le modifiche al sorgente saranno salvate prima dell’invio."), 12)
+                        .addComponent(new JBLabel(regional ? "L’IDE scaricherà l’input, eseguirà il sorgente salvato e invierà i due file."
+                                : "Le modifiche al sorgente saranno salvate prima dell’invio."), 12)
                         .getPanel();
             }
         }.showAndGet();

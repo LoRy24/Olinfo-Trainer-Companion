@@ -36,7 +36,6 @@ final class TrainingClient {
     static final String ORIGIN = CONFIG.getProperty("origin");
     private static final List<String> LOCALES = List.of(CONFIG.getProperty("pdf.locales").split(","));
     private static final List<String> LANGUAGES = List.of(CONFIG.getProperty("code.languages").split(","));
-    private static final Pattern TASK_PATH = Pattern.compile("/task/([a-z0-9][a-z0-9_-]*)", Pattern.CASE_INSENSITIVE);
     private static final Pattern FILE_PATH = Pattern.compile("/files/[a-f0-9]{40}/[^/?#]+", Pattern.CASE_INSENSITIVE);
     private static final Pattern STATEMENT = Pattern.compile("/files/[a-f0-9]{40}/testo\\.pdf(?=[\"'\\\\#\\s]|$)", Pattern.CASE_INSENSITIVE);
     private static final Pattern GRADER = Pattern.compile("(?:grader|stub)(?:[._-][a-z0-9]+)?\\.[a-z0-9]+", Pattern.CASE_INSENSITIVE);
@@ -59,7 +58,7 @@ final class TrainingClient {
     record Language(Selection choice, Asset grader, Asset starter) {}
     record TaskPage(String title, String mode, List<Selection> pdf, List<Asset> attachments) {}
     record Details(String id, String title, String mode, List<Selection> pdf,
-                   List<Language> languages, List<Asset> assets, List<String> notes, String defaultPdf) {}
+                   List<Language> languages, List<Asset> assets, List<String> notes, String defaultPdf, byte[] statement) {}
 
     @FunctionalInterface
     interface Request {
@@ -74,7 +73,7 @@ final class TrainingClient {
 
     static String languageLabel(String id) { return CONFIG.getProperty("code." + id, id); }
 
-    private static byte[] download(String path, int limit, String locale) throws IOException {
+    static byte[] download(String path, int limit, String locale) throws IOException {
         if (!path.startsWith("/") || path.startsWith("//") || path.indexOf('\\') >= 0) {
             throw new IOException("Indirizzo di download non valido.");
         }
@@ -100,19 +99,29 @@ final class TrainingClient {
     }
 
     SearchPage search(String query, int page) throws IOException {
-        String location = "/tasks/" + page + "?search=" + URLEncoder.encode(query.strip(), StandardCharsets.UTF_8);
-        return searchPage(html(location, "it-IT"), page);
+        return search(query, page, false);
+    }
+
+    SearchPage search(String query, int page, boolean regional) throws IOException {
+        String text = query.strip();
+        String location = "/tasks/" + (regional ? "terry/" : "") + page
+                + "?search=" + URLEncoder.encode(regional ? ProjectLink.shortTaskId(text) : text, StandardCharsets.UTF_8);
+        return searchPage(html(location, "it-IT"), page, regional);
     }
 
     static SearchPage searchPage(String html, int page) {
+        return searchPage(html, page, false);
+    }
+
+    static SearchPage searchPage(String html, int page, boolean regional) {
         Map<String, Task> tasks = new LinkedHashMap<>();
         boolean hasNext = false;
-        String next = "/tasks/" + (page + 1);
+        String next = "/tasks/" + (regional ? "terry/" : "") + (page + 1);
         for (Element link : Jsoup.parse(html).select("a[href]")) {
             String url = link.attr("href");
-            var id = TASK_PATH.matcher(url);
-            if (id.matches() && !link.text().isBlank()) {
-                tasks.put(id.group(1), new Task(id.group(1), link.text()));
+            String id = url.startsWith("/task/") ? url.substring(6) : "";
+            if (ProjectLink.TASK_ID.matcher(id).matches() && ProjectLink.isTerry(id) == regional && !link.text().isBlank()) {
+                tasks.put(id, new Task(id, link.text()));
             }
             if (url.equals(next) || url.startsWith(next + "?")) hasNext = true;
         }
@@ -120,10 +129,25 @@ final class TrainingClient {
     }
 
     static TaskPage taskPage(String html) throws IOException {
+        return taskPage(html, "");
+    }
+
+    static TaskPage taskPage(String html, String id) throws IOException {
         var document = Jsoup.parse(html);
         var header = document.selectFirst("header:has(h1)");
         if (header == null) throw new IOException("La pagina del problema ha un formato imprevisto.");
         String title = header.select("h1").text();
+        if (ProjectLink.isTerry(id) && !title.isBlank()) {
+            String base = terryStatementBase(id);
+            var templates = new ArrayList<Asset>();
+            for (Element link : document.select("main a[download][href]")) {
+                String url = link.attr("href");
+                if (!url.startsWith(base)) continue;
+                String name = url.substring(base.length());
+                if (SAFE_FILE.matcher(name).matches()) templates.add(new Asset(name, url, "", null));
+            }
+            return new TaskPage(title, "terry", List.of(new Selection("original", "Originale (Markdown)")), templates);
+        }
         String mode = header.select("span").stream().filter(span -> span.text().equals("Input/output:"))
                 .findFirst().map(span -> span.parent().text().substring("Input/output:".length()).strip()).orElse("");
         if (title.isBlank() || !Set.of("grader", "output-only", "file", "stdin / stdout").contains(mode)) {
@@ -162,9 +186,26 @@ final class TrainingClient {
 
     Details details(String id) throws IOException {
         String url = "/task/" + id;
-        if (!TASK_PATH.matcher(url).matches()) throw new IOException("Identificativo del problema non valido.");
+        if (!ProjectLink.TASK_ID.matcher(id).matches()) throw new IOException("Identificativo del problema non valido.");
         String html = html(url, "it-IT");
-        TaskPage page = taskPage(html);
+        TaskPage page = taskPage(html, id);
+        if (ProjectLink.isTerry(id)) {
+            String base = terryStatementBase(id);
+            String markdown = html(base + "statement.md", "it-IT");
+            List<Asset> examples = new ArrayList<>();
+            for (String kind : List.of("input", "output")) {
+                var example = Pattern.compile("^\\*\\*" + kind + ":\\*\\*[^\\r\\n]*\\r?\\n"
+                                + "(?:[ \\t]*\\r?\\n)*[ \\t]*`{3}[^\\r\\n]*\\r?\\n(.*?)^[ \\t]*`{3}",
+                        Pattern.CASE_INSENSITIVE | Pattern.MULTILINE | Pattern.DOTALL).matcher(markdown);
+                if (example.find()) examples.add(new Asset(kind + ".txt", null, "", example.group(1).getBytes(StandardCharsets.UTF_8)));
+            }
+            var statement = markdown.replaceAll("(\\]\\()([\\w][\\w.-]*(?:/[\\w][\\w.-]*)*)(?=[\\s)])", "$1" + ORIGIN + base + "$2");
+            var options = LANGUAGES.stream().map(language -> new Language(new Selection(language, languageLabel(language)),
+                    null, page.attachments().stream().filter(file -> codeLanguage(file.name()).equals(language)).findFirst().orElse(null)))
+                    .toList();
+            return new Details(id, page.title(), page.mode(), page.pdf(), options, examples, List.of(), null,
+                    statement.getBytes(StandardCharsets.UTF_8));
+        }
         List<Asset> files = new ArrayList<>(page.attachments());
         List<String> notes = new ArrayList<>();
         List<Asset> archives = files.stream().filter(asset -> asset.name().toLowerCase(Locale.ROOT).endsWith(".zip")).toList();
@@ -198,7 +239,11 @@ final class TrainingClient {
         }
         List<Selection> pdf = new ArrayList<>(page.pdf());
         if (pdf.isEmpty() && defaultPdf != null) pdf.add(new Selection("original", "Originale"));
-        return new Details(id, page.title(), page.mode(), pdf, options, files, notes, defaultPdf);
+        return new Details(id, page.title(), page.mode(), pdf, options, files, notes, defaultPdf, null);
+    }
+
+    private static String terryStatementBase(String id) {
+        return "/files/statements/secret/" + ProjectLink.shortTaskId(id) + "/";
     }
 
     byte[] pdf(Details details, String locale) throws IOException {

@@ -86,17 +86,21 @@ final class ProjectCreator {
 
         var examples = TrainingClient.samplePair(details.assets());
         Map<String, byte[]> content = new LinkedHashMap<>();
-        content.put("testo.pdf", client.pdf(details, locale));
+        if (details.statement() == null) {
+            content.put("testo.pdf", client.pdf(details, locale));
+        } else {
+            if (!locale.equals("original")) throw new IOException("Traduzione non disponibile.");
+            content.put("testo.md", details.statement());
+        }
         content.put("input.txt", client.asset(examples.input()));
         content.put("output.txt", client.asset(examples.output()));
 
         String solutionName = null;
         if (!language.equals("output")) {
-            solutionName = language.equals("java")
-                    ? option.starter() == null ? "Main.java" : option.starter().name()
-                    : "file." + language;
+            solutionName = option.starter() != null && (details.mode().equals("terry") || language.equals("java"))
+                    ? option.starter().name() : language.equals("java") ? "Main.java" : "file." + language;
             if (language.equals("cpp") && !details.mode().equals("grader") && option.starter() == null && option.grader() == null) {
-                solutionName = details.id() + ".cpp";
+                solutionName = ProjectLink.shortTaskId(details.id()) + ".cpp";
             }
             if (!TrainingClient.SAFE_FILE.matcher(solutionName).matches()) throw new IOException("Nome del sorgente non valido.");
             String graderName = option.grader() == null ? null : option.grader().name();
@@ -135,12 +139,13 @@ final class ProjectCreator {
             };
         }
         boolean useFiles = mode.equals("file");
+        String cppHeader = mode.equals("terry") ? "<iostream>" : "<bits/stdc++.h>";
         String redirect = useFiles ? """
                     freopen("input.txt", "r", stdin);
                     freopen("output.txt", "w", stdout);
                 """ : "";
         return switch (language) {
-            case "cpp" -> "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n" + redirect
+            case "cpp" -> "#include " + cppHeader + "\nusing namespace std;\n\nint main() {\n" + redirect
                     + "    // Scrivi qui la soluzione.\n    return 0;\n}\n";
             case "c" -> "#include <stdio.h>\n\nint main(void) {\n" + redirect
                     + "    /* Scrivi qui la soluzione. */\n    return 0;\n}\n";

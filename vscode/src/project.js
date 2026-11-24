@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { isHeader, samplePair } = require('./training');
-const { projectXml } = require('./project-link');
+const { projectXml, shortTaskId } = require('./project-link');
 
 const native = new Set(['c', 'cpp']);
 
@@ -17,8 +17,9 @@ function projectPath(parent, name) {
 
 function starter(language, mode) {
   const c = mode === 'file' ? '    freopen("input.txt", "r", stdin);\n    freopen("output.txt", "w", stdout);\n' : '';
+  const cppHeader = mode === 'terry' ? '<iostream>' : '<bits/stdc++.h>';
   const templates = {
-    cpp: '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n' + c + '    // Scrivi qui la soluzione.\n    return 0;\n}\n',
+    cpp: '#include ' + cppHeader + '\nusing namespace std;\n\nint main() {\n' + c + '    // Scrivi qui la soluzione.\n    return 0;\n}\n',
     c: '#include <stdio.h>\n\nint main(void) {\n' + c + '    /* Scrivi qui la soluzione. */\n    return 0;\n}\n',
     py: mode === 'file'
       ? 'import sys\n\nwith open("input.txt") as sys.stdin, open("output.txt", "w") as sys.stdout:\n    # Scrivi qui la soluzione.\n    pass\n'
@@ -51,6 +52,7 @@ async function createProject(client, details, language, locale, parent, name) {
   const target = projectPath(parent, name);
   const option = details.options.find(item => item.id === language);
   if (!option) throw new Error('Linguaggio non disponibile per questo problema.');
+  if (details.statement && locale !== 'original') throw new Error('Traduzione non disponibile.');
   if (!(await fs.stat(parent)).isDirectory()) throw new Error('La destinazione deve essere una cartella.');
   try {
     await fs.lstat(target);
@@ -60,16 +62,17 @@ async function createProject(client, details, language, locale, parent, name) {
   }
 
   const examples = samplePair(details.files);
-  const [pdf, input, output, solution, grader] = await Promise.all([
-    client.pdf(details, locale), client.asset(examples.input), client.asset(examples.output),
+  const [statement, input, output, solution, grader] = await Promise.all([
+    details.statement ?? client.pdf(details, locale), client.asset(examples.input), client.asset(examples.output),
     client.asset(option.starter), client.asset(option.grader),
   ]);
-  const content = new Map([['input.txt', input], ['output.txt', output], ['testo.pdf', pdf]]);
+  const content = new Map([['input.txt', input], ['output.txt', output], [details.statement ? 'testo.md' : 'testo.pdf', statement]]);
   let solutionName;
   if (language !== 'output') {
-    solutionName = language === 'java' ? option.starter?.name || 'Main.java' : 'file.' + language;
+    solutionName = (details.mode === 'terry' || language === 'java') && option.starter?.name
+      || (language === 'java' ? 'Main.java' : 'file.' + language);
     if (language === 'cpp' && details.mode !== 'grader' && !option.starter && !option.grader) {
-      solutionName = details.id + '.cpp';
+      solutionName = shortTaskId(details.id) + '.cpp';
     }
     if (!/^[a-z0-9_][a-z0-9_.-]*$/i.test(solutionName)) throw new Error('Nome del sorgente non valido.');
     const graderName = option.grader && option.grader.name;

@@ -29,6 +29,8 @@ final class SubmissionClient {
     private static final Pattern LANGUAGES = Pattern.compile("\"languages\"\\s*:\\s*(\\{[^{}]*})");
     private static final Pattern GUIDELINES = Pattern.compile("\"guidelinesAccepted\"\\s*:\\s*true\\b");
     private static final Pattern GRADE_COLOR = Pattern.compile("\\bbg-(red|orange|yellow|lime|green)-400\\b");
+    static final Pattern TERRY_ID = Pattern.compile("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", Pattern.CASE_INSENSITIVE);
+    static final Pattern TERRY_SCORE = Pattern.compile("(\\d{1,9})\\s*/\\s*(\\d{1,9})");
     private static final Gson GSON = new Gson();
     private static final int MAX_RESPONSE = 4 * 1024 * 1024;
     // Training returns compiled Lingui descriptors with an id and no message.
@@ -43,9 +45,15 @@ final class SubmissionClient {
             "v16cFz", "Il file supera il limite di Training Olinfo.",
             "x-JU4k", "Training Olinfo non ha ricevuto il sorgente richiesto.");
 
-    record Row(String id, String outcome, Integer score, String color, boolean pending) {}
+    record Row(String id, String outcome, Integer score, Integer maxScore, String color, boolean pending) {
+        String scoreLabel() { return score == null ? outcome : (maxScore == null ? score.toString() : outcome) + " pt"; }
+    }
     record Results(List<Row> rows, Integer best) {
-        String scoreLabel() { return rows.isEmpty() ? "0 su 0" : best == null ? "—" : best + " pt"; }
+        String scoreLabel() {
+            if (rows.isEmpty()) return "0 su 0";
+            if (best == null) return "—";
+            return rows.stream().filter(row -> best.equals(row.score())).findFirst().map(Row::scoreLabel).orElse("—");
+        }
     }
     record Options(String field, String compiler) {}
 
@@ -74,6 +82,15 @@ final class SubmissionClient {
 
     SubmissionClient() { this(new HttpTransport()::exchange); }
     SubmissionClient(Transport transport) { this.transport = transport; }
+
+    Response exchange(String location, String session, Map<String, String> headers, byte[] body) throws IOException {
+        return transport.exchange(location, session, headers, body);
+    }
+
+    static List<String> scripts(String html) {
+        return Jsoup.parse(html).select("script[src]").eachAttr("src").stream().distinct()
+                .filter(src -> src.matches("/_next/static/chunks/[A-Za-z0-9_~.-]+\\.js")).limit(24).toList();
+    }
 
     private static final class HttpTransport {
         private static final HttpClient CLIENT = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8))
@@ -108,9 +125,7 @@ final class SubmissionClient {
 
     String login(String username, String password) throws IOException {
         String action = null;
-        var scripts = Jsoup.parse(page("/login", null)).select("script[src]").eachAttr("src");
-        for (String script : scripts.stream().distinct()
-                .filter(src -> src.matches("/_next/static/chunks/[A-Za-z0-9_~.-]+\\.js")).limit(24).toList()) {
+        for (String script : scripts(page("/login", null))) {
             String content;
             try { content = page(script, null); } catch (IOException exception) { continue; }
             var matcher = ACTION.matcher(content);
@@ -228,7 +243,7 @@ final class SubmissionClient {
         return new Options(names.get(0).getAsString(), compiler);
     }
 
-    private static CharSequence flightData(Document document) throws IOException {
+    static CharSequence flightData(Document document) throws IOException {
         var data = new StringBuilder();
         for (var script : document.select("script")) {
             String content = script.data();
@@ -269,14 +284,25 @@ final class SubmissionClient {
             String href = anchor.attr("href");
             if (!href.startsWith(prefix) || anchor.children().isEmpty()) continue;
             String id = href.substring(prefix.length());
-            if (!id.matches("[1-9]\\d*")) continue;
+            boolean regional = ProjectLink.isTerry(task);
+            if (!(regional ? TERRY_ID.matcher(id).matches() : id.matches("[1-9]\\d*"))) continue;
             var cell = anchor.children().last();
             String outcome = cell.text().strip();
             if (outcome.isEmpty()) continue;
-            Integer score = outcome.matches("\\d{1,9}") ? Integer.parseInt(outcome) : null;
+            Integer score = null;
+            Integer maxScore = null;
+            if (regional) {
+                var points = TERRY_SCORE.matcher(outcome);
+                if (points.matches()) {
+                    score = Integer.parseInt(points.group(1));
+                    maxScore = Integer.parseInt(points.group(2));
+                }
+            } else if (outcome.matches("\\d{1,9}")) {
+                score = Integer.parseInt(outcome);
+            }
             var badge = cell.selectFirst("span");
             var grade = GRADE_COLOR.matcher(badge == null ? "" : badge.className());
-            rows.add(new Row(id, outcome, score, grade.find() ? grade.group(1) : null,
+            rows.add(new Row(id, outcome, score, maxScore, grade.find() ? grade.group(1) : null,
                     outcome.toLowerCase(java.util.Locale.ROOT).contains("in corso")));
             if (score != null && (best == null || score > best)) best = score;
         }

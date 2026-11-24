@@ -14,12 +14,16 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 record ProjectLink(Path root, String task, String language, String source) {
-    static final Pattern TASK_ID = Pattern.compile("[a-z0-9][a-z0-9_-]{0,119}", Pattern.CASE_INSENSITIVE);
+    static final Pattern TASK_ID = Pattern.compile("(?:terry/)?[A-Za-z0-9][A-Za-z0-9_-]{0,119}");
     private static final Map<String, Set<String>> EXTENSIONS = Map.of(
             "cpp", Set.of("cpp", "cc", "cxx"), "c", Set.of("c"), "py", Set.of("py"),
             "java", Set.of("java"), "pas", Set.of("pas", "pp"));
     private static final Pattern GRADER = Pattern.compile("(?:grader|stub)(?:[._-].*)?", Pattern.CASE_INSENSITIVE);
     private static final int MAX_SOURCE = 100_000;
+
+    static boolean isTerry(String task) { return task.startsWith("terry/"); }
+
+    static String shortTaskId(String task) { return isTerry(task) ? task.substring(6) : task; }
 
     static byte[] document(String task, String language, String source) throws IOException {
         validate(task, language, source);
@@ -61,7 +65,8 @@ record ProjectLink(Path root, String task, String language, String source) {
     }
 
     private static void validate(String task, String language, String source) throws IOException {
-        if (!TASK_ID.matcher(task).matches() || !(EXTENSIONS.containsKey(language) || language.equals("output"))) {
+        if (!TASK_ID.matcher(task).matches() || !(EXTENSIONS.containsKey(language)
+                || (language.equals("output") && !isTerry(task)))) {
             throw new IOException("Problema o linguaggio non valido in olinfo.xml.");
         }
         if (language.equals("output") && source == null) return;

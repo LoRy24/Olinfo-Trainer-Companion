@@ -2,12 +2,14 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { load } = require('cheerio/slim');
 
-const taskId = /^[a-z0-9][a-z0-9_-]{0,119}$/i;
+const taskId = /^(?:terry\/)?[A-Za-z0-9][A-Za-z0-9_-]{0,119}$/;
+const isTerry = task => task.startsWith('terry/');
+const shortTaskId = task => isTerry(task) ? task.slice(6) : task;
 const extensions = { cpp: ['cpp', 'cc', 'cxx'], c: ['c'], py: ['py'], java: ['java'], pas: ['pas', 'pp'] };
 const maxSource = 100_000;
 
 function validate({ task, language, source = '' }) {
-  if (!taskId.test(task ?? '') || !(Object.hasOwn(extensions, language) || language === 'output')) {
+  if (!taskId.test(task ?? '') || !(Object.hasOwn(extensions, language) || (language === 'output' && !isTerry(task)))) {
     throw new Error('Problema o linguaggio non valido in olinfo.xml.');
   }
   if (language === 'output' && !source) return { task, language, source };
@@ -64,4 +66,4 @@ async function readSource(link) {
   }
 }
 
-module.exports = { projectXml, readProject, readSource, taskId, extensions };
+module.exports = { projectXml, readProject, readSource, taskId, isTerry, shortTaskId, extensions };

@@ -204,7 +204,7 @@ final class OlinfoDashboard {
                                                                           boolean selected, boolean focus) {
                     var label = (javax.swing.JLabel) super.getListCellRendererComponent(list, value, index, selected, focus);
                     if (value instanceof SubmissionClient.Row row) {
-                        label.setText("#" + row.id() + "   " + (row.score() == null ? row.outcome() : row.score() + " pt"));
+                        label.setText("#" + row.id().split("-", 2)[0] + "   " + row.scoreLabel());
                         label.setIcon(dot(AccountData.scoreColor(row.score(), row.color())));
                         label.setBorder(JBUI.Borders.empty(5, 6));
                     }
@@ -230,7 +230,7 @@ final class OlinfoDashboard {
 
         private void openSelected() {
             var row = submissions.getSelectedValue();
-            if (row != null) ui.openTask("/submissions/" + row.id());
+            if (row != null) ui.openSubmission(row.id());
         }
 
         void render() {
@@ -238,6 +238,9 @@ final class OlinfoDashboard {
             var results = problem == null ? null : problem.results();
             var pending = ui.pendingId();
             boolean submitting = ui.submitting();
+            boolean regional = problem != null && ProjectLink.isTerry(problem.link().task());
+            submit.setText(regional ? "Esegui e invia" : "Invia soluzione");
+            showSubmission.setText(regional ? "Dettagli invio" : "Apri invio");
             submit.setEnabled(!submitting && problem != null && problem.link().source() != null);
             status.setText(submitting ? "Invio in corso…"
                     : pending != null ? "Invio #" + pending + " ricevuto. Attendo la valutazione…"
@@ -253,7 +256,7 @@ final class OlinfoDashboard {
             details.setText(problem == null ? "Apri una cartella con olinfo.xml."
                     : problem.link().task() + " · " + problem.link().language()
                     + (problem.link().source() == null ? "" : " · " + problem.link().source())
-                    + (problem.mode() == null || problem.mode().isBlank() ? "" : " · " + problem.mode()));
+                    + (regional ? " · Territoriali" : problem.mode() == null || problem.mode().isBlank() ? "" : " · " + problem.mode()));
             best.setText(results == null ? "" : "Migliore · " + results.scoreLabel());
             best.setIcon(results == null ? null : dot(ui.snapshot().color()));
             login.setVisible(problem != null && problem.signedOut());

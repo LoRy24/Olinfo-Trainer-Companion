@@ -28,28 +28,31 @@ const safeColor = color => ['red', 'orange', 'yellow', 'lime', 'green'].includes
 function renderDashboard({ account, problem }) {
   ui['current-title'].textContent = problem?.title || problem?.task || 'Questo problema';
   ui['current-info'].textContent = problem
-    ? [problem.task, problem.language?.toUpperCase(), problem.source, problem.mode].filter(Boolean).join(' · ')
+    ? [problem.task, problem.language?.toUpperCase(), problem.source,
+      problem.task.startsWith('terry/') ? 'Territoriali' : problem.mode].filter(Boolean).join(' · ')
     : 'Apri una cartella con olinfo.xml.';
   ui['current-score'].hidden = !problem?.rows;
   ui['current-score'].textContent = 'Migliore · ' + (problem?.best ?? '—');
   ui['current-score'].dataset.color = safeColor(problem?.color);
   ui['current-open'].disabled = !problem?.task;
-  ui['current-submit'].disabled = !problem?.source;
+  ui['current-submit'].disabled = !problem?.source || problem?.uploading || problem?.waiting;
+  ui['current-submit'].textContent = problem?.task.startsWith('terry/') ? 'Esegui e invia' : 'Invia soluzione';
   ui['current-login'].hidden = !problem?.signedOut;
   ui['current-history'].hidden = !problem?.task;
   status(ui['current-message'], problem?.error || (problem?.signedOut ? 'Accedi per vedere i tuoi invii.'
-    : problem?.waiting ? 'Valutazione in corso…' : problem?.rows?.length === 0 ? 'Nessun invio.' : ''));
+    : problem?.uploading ? 'Invio in corso…' : problem?.waiting ? 'Valutazione in corso…'
+      : problem?.rows?.length === 0 ? 'Nessun invio.' : ''));
   ui['current-results'].replaceChildren();
   for (const row of problem?.rows || []) {
     const entry = document.createElement('li');
     const button = document.createElement('button');
     button.className = 'secondary';
     const number = document.createElement('span');
-    number.textContent = '#' + row.id;
+    number.textContent = '#' + row.id.split('-')[0];
     const outcome = document.createElement('span');
     outcome.className = 'score';
     outcome.dataset.color = safeColor(row.color);
-    outcome.textContent = row.score === undefined ? row.outcome : row.score + ' pt';
+    outcome.textContent = row.score === undefined ? row.outcome : (row.maxScore === undefined ? row.score : row.outcome) + ' pt';
     button.append(number, outcome);
     button.addEventListener('click', () => openTraining('row', row.id));
     entry.append(button);
@@ -106,6 +109,7 @@ function updateControls() {
   ui.locale.disabled = creating || !ui.locale.options.length;
   ui.create.disabled = creating || !detail || !ui.language.value || !ui.locale.value;
   ui.search.querySelector('button').disabled = creating;
+  ui.catalog.disabled = creating;
   for (const id of ['project-name', 'parent', 'browse']) ui[id].disabled = creating;
 }
 
@@ -141,13 +145,14 @@ function search(newQuery, newPage) {
   ui.results.replaceChildren();
   selectTask();
   status(ui['search-status'], 'Ricerca in corso…');
-  vscode.postMessage({ type: 'search', requestId: searchId, query, page });
+  vscode.postMessage({ type: 'search', requestId: searchId, query, page, regional: ui.catalog.value === 'terry' });
 }
 
 ui.search.addEventListener('submit', event => {
   event.preventDefault();
   search(ui.query.value, 1);
 });
+ui.catalog.addEventListener('change', () => search(ui.query.value, 1));
 ui.previous.addEventListener('click', () => search(query, page - 1));
 ui.next.addEventListener('click', () => search(query, page + 1));
 ui.results.addEventListener('change', selectTask);
@@ -198,11 +203,11 @@ window.addEventListener('message', event => {
       detail = message;
       for (const locale of message.pdf) ui.locale.add(new Option(locale.label, locale.id));
       for (const language of message.languages) ui.language.add(new Option(language.label, language.id));
-      status(ui['task-status'], !message.pdf.length ? 'Il PDF non è disponibile.'
+      status(ui['task-status'], !message.pdf.length ? 'Il testo non è disponibile.'
         : !message.languages.length ? 'Nessun sorgente o grader pubblico disponibile.' : message.title + ' · ' + message.id);
       if (!ui['project-name'].value || ui['project-name'].value === suggestedName) {
-        ui['project-name'].value = message.id;
-        suggestedName = message.id;
+        suggestedName = message.id.replace(/^terry\//, '');
+        ui['project-name'].value = suggestedName;
       }
       updateGraderMessage();
       break;

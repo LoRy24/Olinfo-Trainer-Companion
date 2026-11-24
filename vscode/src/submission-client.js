@@ -1,11 +1,13 @@
 const { load } = require('cheerio/slim');
-const { taskId } = require('./project-link');
+const { taskId, isTerry } = require('./project-link');
 const { accountUsername, profile, rankFor } = require('./account');
 
 const origin = 'https://training.olinfo.it';
 const sessionCookie = /^(?:__Secure-)?better-auth\.session_token=[A-Za-z0-9._%+~\/=-]+$/;
 const actionReference = /createServerReference[^\w"]{0,12}"([a-f0-9]{40,64})"[^;]{0,180}?"loginPassword"/;
 const maxBytes = 4 * 1024 * 1024;
+const terryId = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
+const grade = /\bbg-(red|orange|yellow|lime|green)-400\b/;
 // Training returns compiled Lingui descriptors with an id and no message.
 const submissionErrors = {
   '0RqsvY': 'Hai inviato troppe soluzioni. Riprova tra un minuto.',
@@ -37,9 +39,21 @@ function loginScripts(html) {
 function flight(html) {
   const $ = load(html);
   return $('script').map((_, script) => {
+    const text = $(script).text();
     const segments = [];
-    for (const match of $(script).text().matchAll(/self\.__next_f\.push\(\[1,("(?:\\.|[^"\\])*")\]\)/g)) {
-      segments.push(JSON.parse(match[1]));
+    const prefix = 'self.__next_f.push([1,';
+    let cursor = 0;
+    for (let push = text.indexOf(prefix, cursor); push >= 0; push = text.indexOf(prefix, cursor)) {
+      const start = cursor = push + prefix.length;
+      if (text[cursor++] !== '"') continue;
+      while (cursor < text.length) {
+        const next = text[cursor++];
+        if (next === '\\') cursor++;
+        else if (next === '"') {
+          if (text.startsWith('])', cursor)) segments.push(JSON.parse(text.slice(start, cursor)));
+          break;
+        }
+      }
     }
     return segments.join('');
   }).get().join('');
@@ -74,13 +88,16 @@ function submissionList(html, task) {
     const href = $(node).attr('href');
     if (!href.startsWith(prefix)) continue;
     const id = href.slice(prefix.length);
-    if (!/^[1-9]\d*$/.test(id)) continue;
+    const regional = isTerry(task);
+    if (!(regional ? terryId : /^[1-9]\d*$/).test(id)) continue;
     const cell = $(node).children().last();
     const outcome = cell.text().trim();
     if (!outcome) continue;
-    const score = /^\d{1,9}$/.test(outcome) ? Number(outcome) : undefined;
-    const color = (cell.find('span').first().attr('class') || '').match(/\bbg-(red|orange|yellow|lime|green)-400\b/)?.[1];
-    rows.push({ id, outcome, score, color, pending: /in corso/i.test(outcome) });
+    const points = (regional ? /^(\d{1,9})\s*\/\s*(\d{1,9})$/ : /^(\d{1,9})$/).exec(outcome);
+    const score = points ? Number(points[1]) : undefined;
+    const color = (cell.find('span').first().attr('class') || '').match(grade)?.[1];
+    rows.push({ id, outcome, score, color, pending: /in corso/i.test(outcome),
+      ...(regional && points ? { maxScore: Number(points[2]) } : {}) });
   }
   if (!rows.length) {
     $('script').remove();
@@ -207,4 +224,5 @@ class SubmissionClient {
   }
 }
 
-module.exports = { SubmissionClient, LoginRequired, submissionList, submitOptions, loginScripts, actionReference, origin };
+module.exports = { SubmissionClient, LoginRequired, submissionList, submitOptions, loginScripts, actionReference,
+  flight, pathFor, terryId, origin };

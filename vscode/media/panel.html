@@ -18,6 +18,9 @@
     <div id="new-pane">
     <section aria-labelledby="catalog-title">
       <h2 id="catalog-title">Catalogo</h2>
+      <label>Formato
+        <select id="catalog"><option value="cms">Nazionali, OIS e altri</option><option value="terry">Territoriali</option></select>
+      </label>
       <form id="search" class="inline">
         <label for="query" class="sr-only">Titolo o identificativo del problema</label>
         <input id="query" type="search" placeholder="Titolo o identificativo" maxlength="200">
@@ -36,7 +39,7 @@
       <h2 id="project-title">Progetto</h2>
       <p id="task-status" role="status">Seleziona un problema dal catalogo.</p>
       <div class="choices">
-        <label>Lingua del PDF <select id="locale" disabled></select></label>
+        <label>Lingua del testo <select id="locale" disabled></select></label>
         <label>Linguaggio <select id="language" disabled></select></label>
       </div>
       <p id="grader-status" role="status" hidden></p>

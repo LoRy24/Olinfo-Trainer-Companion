@@ -41,6 +41,7 @@ final class TrainerPanel implements Disposable {
     private final Consumer<Path> onCreated;
     private final boolean ownsLocation;
     private final TrainingClient client = new TrainingClient();
+    private final ComboBox<String> catalogFormat = new ComboBox<>(new String[]{"Nazionali, OIS e altri", "Territoriali"});
     private final JBTextField query = new JBTextField();
     private final JButton search = new JButton("Cerca");
     private final DefaultListModel<TrainingClient.Task> results = new DefaultListModel<>();
@@ -94,6 +95,7 @@ final class TrainerPanel implements Disposable {
         list.getAccessibleContext().setAccessibleName("Problemi trovati");
         query.addActionListener(event -> searchFirstPage());
         search.addActionListener(event -> searchFirstPage());
+        catalogFormat.addActionListener(event -> searchFirstPage());
         previous.addActionListener(event -> search(activeQuery, page - 1));
         next.addActionListener(event -> search(activeQuery, page + 1));
         list.addListSelectionListener(event -> { if (!event.getValueIsAdjusting()) selectTask(); });
@@ -126,6 +128,7 @@ final class TrainerPanel implements Disposable {
         body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
         body.setBorder(JBUI.Borders.empty(12));
         var catalog = section("Catalogo");
+        add(catalog, field("Formato", catalogFormat));
         add(catalog, inline(query, search));
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.setVisibleRowCount(7);
@@ -144,7 +147,7 @@ final class TrainerPanel implements Disposable {
         var settings = section("Progetto");
         add(settings, taskStatus);
         var selections = new JPanel(new GridLayout(1, 2, JBUI.scale(8), 0));
-        selections.add(field("Lingua del PDF", locales));
+        selections.add(field("Lingua del testo", locales));
         selections.add(field("Linguaggio", languages));
         add(settings, selections);
         add(settings, graderStatus);
@@ -231,12 +234,13 @@ final class TrainerPanel implements Disposable {
         searching = true;
         hasNext = false;
         int request = ++searchId;
+        boolean regional = catalogFormat.getSelectedIndex() == 1;
         results.clear();
         selectTask();
         pageStatus.setText("Ricerca in corso…");
         pageStatus.setToolTipText(null);
         updateControls();
-        background(() -> client.search(text, requestedPage), result -> {
+        background(() -> client.search(text, requestedPage, regional), result -> {
             if (request != searchId) return;
             searching = false;
             hasNext = result.hasNext();
@@ -272,12 +276,12 @@ final class TrainerPanel implements Disposable {
             details = result;
             for (var item : result.pdf()) locales.addItem(item);
             for (var item : result.languages()) languages.addItem(item.choice());
-            if (result.pdf().isEmpty()) taskStatus.setText("Il PDF non è disponibile.");
+            if (result.pdf().isEmpty()) taskStatus.setText("Il testo non è disponibile.");
             else if (result.languages().isEmpty()) taskStatus.setText("Nessun sorgente o grader pubblico disponibile.");
             else taskStatus.setText(result.title() + " · " + result.id());
             if (name.getText().isBlank() || name.getText().equals(suggestedName)) {
-                name.setText(result.id());
-                suggestedName = result.id();
+                suggestedName = ProjectLink.shortTaskId(result.id());
+                name.setText(suggestedName);
             }
             updateGraderStatus();
             updateControls();
@@ -336,6 +340,7 @@ final class TrainerPanel implements Disposable {
 
     private void updateControls() {
         query.setEnabled(!creating);
+        catalogFormat.setEnabled(!creating);
         search.setEnabled(!creating);
         previous.setEnabled(!creating && !searching && page > 1);
         next.setEnabled(!creating && !searching && hasNext);

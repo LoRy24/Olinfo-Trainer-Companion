@@ -69,9 +69,12 @@ public final class OlinfoScoreWidget implements StatusBarWidgetFactory {
                 var problem = ui.problem();
                 boolean hasSource = problem != null && problem.link().source() != null;
                 boolean busy = ui.submitting() || ui.pendingId() != null || (hasSource && problem.waiting());
+                upload.setToolTipText(hasSource && ProjectLink.isTerry(problem.link().task())
+                        ? "Esegui e invia a Training Olinfo" : "Invia soluzione a Training Olinfo");
+                upload.getAccessibleContext().setAccessibleName(upload.getToolTipText());
                 upload.setVisible(hasSource && !busy);
                 spinner.setVisible(hasSource && busy);
-                spinner.setToolTipText(ui.submitting() ? "Invio del sorgente in corso" : "Valutazione in corso su Training Olinfo");
+                spinner.setToolTipText(ui.submitting() ? "Invio in corso" : "Valutazione in corso su Training Olinfo");
                 content.setVisible(!state.text().isEmpty());
             });
         }

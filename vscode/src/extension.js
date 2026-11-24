@@ -70,7 +70,7 @@ function activate(context) {
           case 'search': {
             if (typeof message.query !== 'string' || message.query.length > 200
                 || !Number.isSafeInteger(message.page) || message.page < 1) return;
-            await send('results', { requestId, ...await client.search(message.query, message.page) });
+            await send('results', { requestId, ...await client.search(message.query, message.page, message.regional === true) });
             break;
           }
           case 'details': {

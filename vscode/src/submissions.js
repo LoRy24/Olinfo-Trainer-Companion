@@ -1,8 +1,11 @@
 const vscode = require('vscode');
-const { readProject, readSource } = require('./project-link');
-const { LoginRequired, SubmissionClient, origin } = require('./submission-client');
+const path = require('node:path');
+const { isTerry, readProject, readSource } = require('./project-link');
+const { LoginRequired, SubmissionClient, origin, terryId } = require('./submission-client');
+const { TerryClient } = require('./terry-client');
+const { runTerry } = require('./terry-runner');
 const { scoreColor } = require('./account');
-const { taskPage, languageLabel } = require('./training');
+const { TrainingClient, taskPage, languageLabel } = require('./training');
 
 const palette = { red: '#f87171', orange: '#fb923c', yellow: '#facc15', lime: '#a3e635', green: '#4ade80' };
 
@@ -12,6 +15,8 @@ const errorMessage = error => error instanceof Error ? error.message : 'Operazio
 
 function registerSubmissions(context, onChange, openAccount) {
   const api = new SubmissionClient();
+  const training = new TrainingClient();
+  const terry = new TerryClient(api, (url, limit) => training.read(url, limit));
   const item = vscode.window.createStatusBarItem('olinfoTrainer.score', vscode.StatusBarAlignment.Right, 30);
   const indicator = vscode.window.createStatusBarItem('olinfoTrainer.indicator', vscode.StatusBarAlignment.Right, 29.99);
   const upload = vscode.window.createStatusBarItem('olinfoTrainer.upload', vscode.StatusBarAlignment.Right, 29.98);
@@ -60,14 +65,14 @@ function registerSubmissions(context, onChange, openAccount) {
       const waiting = current.waiting || (tracking && Date.now() < tracking.until);
       upload.text = uploading || waiting ? '$(loading~spin)' : '$(cloud-upload)';
       upload.command = uploading || waiting ? undefined : 'olinfoTrainer.submit';
-      upload.tooltip = uploading ? 'Invio del sorgente in corso'
-        : waiting ? 'Valutazione in corso su Training Olinfo' : 'Invia soluzione a Training Olinfo';
+      upload.tooltip = uploading ? 'Invio in corso' : waiting ? 'Valutazione in corso su Training Olinfo'
+        : isTerry(current.task) ? 'Esegui e invia a Training Olinfo' : 'Invia soluzione a Training Olinfo';
       upload.accessibilityInformation = { label: upload.tooltip };
       upload.show();
     } else {
       upload.hide();
     }
-    onChange({ problem: current, account });
+    onChange({ problem: current && { ...current, uploading }, account });
   };
 
   async function refreshAccount(force = false) {
@@ -133,7 +138,7 @@ function registerSubmissions(context, onChange, openAccount) {
         return;
       }
       if (problemMeta?.task !== link.task || !problemMeta.title) {
-        const meta = await api.page('/task/' + link.task).then(taskPage).catch(() => undefined);
+        const meta = await api.page('/task/' + link.task).then(html => taskPage(html, link.task)).catch(() => undefined);
         if (id !== refreshId) return;
         problemMeta = { task: link.task, title: meta?.title, mode: meta?.mode };
       }
@@ -166,7 +171,9 @@ function registerSubmissions(context, onChange, openAccount) {
       } else if (expired && !tracked) {
         monitored.delete(link.root);
       }
-      const best = result.rows.length === 0 ? '0 su 0' : result.best === undefined ? '—' : result.best + ' pt';
+      const bestRow = result.rows.find(row => row.score !== undefined && row.score === result.best);
+      const best = result.rows.length === 0 ? '0 su 0' : result.best === undefined ? '—'
+        : (bestRow?.maxScore === undefined ? result.best : bestRow.outcome) + ' pt';
       const color = result.rows.length === 0 && !waiting ? 'red'
         : result.rows.find(row => row.score !== undefined && row.score === result.best)?.color ?? scoreColor(result.best);
       item.text = '$(account) Olinfo ' + best;
@@ -219,10 +226,13 @@ function registerSubmissions(context, onChange, openAccount) {
     if (!session) return;
     const title = problemMeta?.task === link.task && problemMeta.title;
     const task = title ? title + ' (' + link.task + ')' : link.task;
-    const confirmed = await vscode.window.showInformationMessage('Inviare la soluzione a Training Olinfo?', {
+    const regional = isTerry(link.task);
+    const confirmed = await vscode.window.showInformationMessage(regional
+      ? 'Eseguire e inviare la soluzione Territoriali?' : 'Inviare la soluzione a Training Olinfo?', {
       modal: true,
       detail: task + '\n' + link.source + ' · ' + languageLabel(link.language)
-        + '\n\nLe modifiche al sorgente saranno salvate prima dell’invio.',
+        + (regional ? '\n\nL’IDE scaricherà l’input, eseguirà il sorgente salvato e invierà i due file.'
+          : '\n\nLe modifiche al sorgente saranno salvate prima dell’invio.'),
     }, 'Invia a Training');
     if (confirmed !== 'Invia a Training') return;
     uploading = true;
@@ -233,10 +243,46 @@ function registerSubmissions(context, onChange, openAccount) {
     if (editor?.isDirty && !await editor.save()) throw new Error('Salva il sorgente prima dell’invio.');
     const source = await readSource(link);
     const id = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Invio della soluzione a Olinfo…' },
-      () => api.submit(link, source, session));
-    monitored.set(link.root, { id, until: Date.now() + 120_000 });
-    void vscode.window.showInformationMessage('Olinfo ha ricevuto l’invio #' + id + '.');
+      async progress => {
+        if (!regional) return api.submit(link, source, session);
+        const runtimes = link.language === 'java' && vscode.workspace.getConfiguration('java', uri).get('configuration.runtimes');
+        const jdk = Array.isArray(runtimes) && runtimes.find(item =>
+          item?.default && typeof item.path === 'string' && path.isAbsolute(item.path))?.path;
+        const { input, output } = await runTerry(link, source, () => terry.input(link.task, session),
+          message => progress.report({ message }), jdk);
+        progress.report({ message: 'Caricamento di sorgente e output…' });
+        return terry.submit(link, input, source, output, session);
+      });
+    if (regional) {
+      const result = await terry.result(link.task, id, session).catch(() => undefined);
+      const summary = result
+        ? result.score + '/' + result.maxScore + ' punti · ' + (result.cases.length
+          ? result.cases.filter(item => item.outcome === 'Corretto').length + '/' + result.cases.length + ' casi corretti'
+          : 'Nessun caso valutato')
+        : 'Olinfo ha ricevuto l’invio #' + id.split('-')[0] + '.';
+      void vscode.window.showInformationMessage(summary, 'Vedi dettagli').then(choice => {
+        if (choice === 'Vedi dettagli') void run(() => showTerryResult(link, id, session, result));
+      });
+      if (accountVisible) void refreshAccount(true);
+    } else {
+      monitored.set(link.root, { id, until: Date.now() + 120_000 });
+      void vscode.window.showInformationMessage('Olinfo ha ricevuto l’invio #' + id + '.');
+    }
     await refresh(true);
+  }
+
+  async function showTerryResult(link, id, session, cached) {
+    const result = cached ?? await terry.result(link.task, id, session);
+    const rows = result.cases.map(item => ({ label: 'Case #' + item.number + ' · ' + item.outcome, detail: item.detail }));
+    if (!rows.length) rows.push({ label: 'Nessun caso valutato' });
+    rows.push(...result.notes.map(note => ({ label: note })));
+    const web = { label: '$(link-external) Apri invio su Training', web: true };
+    const picked = await vscode.window.showQuickPick([...rows, web], {
+      title: 'Territoriali · ' + result.score + '/' + result.maxScore + ' punti',
+      placeHolder: 'Filtra per caso o esito',
+      matchOnDetail: true,
+    });
+    if (picked?.web) await vscode.env.openExternal(vscode.Uri.parse(historyPath(link) + '/' + id));
   }
 
   async function run(operation) {
@@ -303,8 +349,12 @@ function registerSubmissions(context, onChange, openAccount) {
       if (!link) return;
       if (kind === 'history') await vscode.env.openExternal(vscode.Uri.parse(historyPath(link)));
       if (kind === 'problem') await vscode.env.openExternal(vscode.Uri.parse(origin + '/task/' + link.task));
-      if (kind === 'row' && typeof id === 'string' && /^[1-9]\d*$/.test(id)) {
-        await vscode.env.openExternal(vscode.Uri.parse(historyPath(link) + '/' + id));
+      if (kind === 'row' && typeof id === 'string') {
+        if (isTerry(link.task) && terryId.test(id)) {
+          await run(async () => showTerryResult(link, id, await context.secrets.get(key)));
+        } else if (!isTerry(link.task) && /^[1-9]\d*$/.test(id)) {
+          await vscode.env.openExternal(vscode.Uri.parse(historyPath(link) + '/' + id));
+        }
       }
     },
   };

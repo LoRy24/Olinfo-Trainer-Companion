@@ -51,10 +51,11 @@ Il pacchetto `.zip` si trova in `jetbrains/build/distributions/`. Puoi installar
 | `oii_datazione` | C++, grader pubblico, esempi, scelta tra PDF italiano e inglese |
 | `easy2` | Programma autonomo con esempi in ZIP e sorgente generato `easy2.cpp` |
 | `oii_z` | Template pubblico e avviso per il grader non scaricabile |
+| `terry/download` | Importazione Territoriali, esecuzione locale, invio di sorgente e output, dettaglio dei casi |
 
 Controlla anche una ricerca senza risultati, una cartella già esistente e il pulsante **Apri cartella**. Per C++ puoi validare il progetto generato con `cmake -S . -B build` e `cmake --build build`.
 
-I test predefiniti usano fixture locali e non dipendono dal servizio esterno. Imposta `OLINFO_LIVE_TEST=1` per includere un test end-to-end con il catalogo reale. In PowerShell usa `$env:OLINFO_LIVE_TEST = '1'` prima di avviare la suite.
+I test predefiniti usano fixture locali e non dipendono dal servizio esterno. Imposta `OLINFO_LIVE_TEST=1` per includere le verifiche con i cataloghi reali. In PowerShell usa `$env:OLINFO_LIVE_TEST = '1'` prima di avviare la suite.
 
 I test di invio simulano il login, il multipart e gli esiti della valutazione. Per una prova manuale, apri un progetto con `olinfo.xml`, accedi dal badge **Olinfo** e usa l’icona **Upload** accanto al punteggio. Verifica sorgente e linguaggio nel dialogo, poi controlla la rotellina, l’esito e il punteggio nella scheda **Questo problema**. La prova manuale crea un invio nel tuo account.
 
@@ -70,6 +71,8 @@ I test di invio simulano il login, il multipart e gli esiti della valutazione. P
 I client interrogano la pagina pubblica `/tasks/{pagina}?search=…` e le pagine `/task/{id}`. I dettagli sono ricavati dal markup pubblico e il PDF viene richiesto con la locale scelta. La piattaforma non offre alle sessioni anonime un contratto stabile per questi dati. Se cambia il markup, aggiorna i due client e le fixture. Il [sorgente di CMSocial](https://github.com/olimpiadi-informatica/cmsocial) documenta il comportamento del sito.
 
 Per l’accesso il plugin legge il riferimento del modulo di login pubblicato dal sito. L’invio usa `/files/submit` e ricava nome del campo e compilatore dal modulo autenticato. Il monitor legge `/task/{id}/submissions`, inizialmente ogni pochi secondi per gli invii in corso. Le fixture condivise permettono di aggiornare le due implementazioni insieme quando il sito cambia.
+
+Per Terry i client usano `/tasks/terry/{pagina}` e `/task/terry/{id}`. I riferimenti per richiedere l’input, sostituirlo e inviare i file arrivano dagli script del modulo Terry. Il plugin legge la valutazione dalla pagina dell’invio restituita da Training. Le fixture Terry coprono la sostituzione di un input scaduto, il multipart e gli esiti parziali.
 
 ## Release
 

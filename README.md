@@ -28,7 +28,7 @@ https://github.com/LoRy24/Olinfo-Trainer-Companion/releases/latest/download/upda
 
 ## Crea un progetto
 
-Apri **Olinfo Trainer → Nuovo problema**, cerca per nome o identificativo e scegli lingua del PDF, linguaggio e destinazione. Il progetto contiene il PDF, `input.txt`, `output.txt`, `olinfo.xml`, il sorgente e gli eventuali allegati pubblici. [Dettagli sui file generati](docs/USO.md)
+Apri **Olinfo Trainer → Nuovo problema**, scegli il formato e cerca per nome o identificativo. Il progetto contiene il testo, `input.txt`, `output.txt`, `olinfo.xml`, il sorgente e gli eventuali allegati pubblici. [Dettagli sui file generati](docs/USO.md)
 
 ![Catalogo di Training Olinfo e creazione di un progetto in CLion](docs/screenshots/clion-nuovo-problema.png)
 
@@ -41,6 +41,8 @@ Apri **Olinfo Trainer → Nuovo problema**, cerca per nome o identificativo e sc
 ![Problema corrente, miglior punteggio e storico degli invii in CLion](docs/screenshots/clion-invii.png)
 
 Per il primo invio, completa la registrazione e accetta le [linee guida di Training](https://training.olinfo.it/guidelines).
+
+Per i problemi in formato **Territoriali**, scegli **Esegui e invia**. L’IDE richiede o recupera l’input di Terry, esegue il programma in locale e invia il sorgente insieme all’output. L’esito mostra punti ottenuti, totale e risultato di ciascun caso di test. [Requisiti per l’esecuzione locale](docs/USO.md#territoriali)
 
 ## Account Olinfo
 

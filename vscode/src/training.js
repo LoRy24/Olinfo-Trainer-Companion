@@ -2,6 +2,7 @@ const { load } = require('cheerio/slim');
 const { unzipSync } = require('fflate');
 const fs = require('node:fs');
 const path = require('node:path');
+const { taskId, isTerry, shortTaskId } = require('./project-link');
 
 const source = typeof CATALOG_PROPERTIES === 'undefined'
   ? fs.readFileSync(path.join(__dirname, '../../shared/catalog.properties'), 'utf8')
@@ -11,31 +12,40 @@ const origin = config.origin;
 const locales = config['pdf.locales'].split(',');
 const languages = config['code.languages'].split(',');
 const languageLabel = id => config['code.' + id] || id;
-const taskPattern = /^\/task\/([a-z0-9][a-z0-9_-]*)$/i;
 const filePattern = /^\/files\/[a-f0-9]{40}\/[^/?#]+$/i;
 const statementPattern = /\/files\/[a-f0-9]{40}\/testo\.pdf(?=["'\\#\s]|$)/gi;
 const archiveLimit = 24 * 1024 * 1024;
 const assetLimit = 4 * 1024 * 1024;
 const pdfLimit = 32 * 1024 * 1024;
 
-function searchPage(html, page) {
+function searchPage(html, page, regional = false) {
   const $ = load(html);
   const tasks = new Map();
   let hasNext = false;
   for (const link of $('a[href]')) {
     const href = $(link).attr('href');
-    const match = taskPattern.exec(href);
+    const id = href.startsWith('/task/') && href.slice(6);
     const title = $(link).text().trim();
-    if (match && title) tasks.set(match[1], { id: match[1], title });
-    if (href.split('?')[0] === '/tasks/' + (page + 1)) hasNext = true;
+    if (id && taskId.test(id) && isTerry(id) === regional && title) tasks.set(id, { id, title });
+    if (href.split('?')[0] === '/tasks/' + (regional ? 'terry/' : '') + (page + 1)) hasNext = true;
   }
   return { tasks: [...tasks.values()], hasNext };
 }
 
-function taskPage(html) {
+function taskPage(html, id) {
   const $ = load(html);
   const header = $('header').has('h1').first();
   const title = header.find('h1').text().trim();
+  if (id && isTerry(id)) {
+    if (!title) throw new Error('La pagina del problema Territoriali ha un formato imprevisto.');
+    const base = '/files/statements/secret/' + shortTaskId(id) + '/';
+    const attachments = $('main a[download][href]').map((_, link) => {
+      const url = $(link).attr('href');
+      const name = url.slice(base.length);
+      return url.startsWith(base) && /^[a-z0-9_][a-z0-9_.-]*$/i.test(name) ? { name, url } : null;
+    }).get();
+    return { title, mode: 'terry', attachments };
+  }
   const ioLabel = header.find('span').filter((_, item) => $(item).text().trim() === 'Input/output:').first();
   const mode = ioLabel.parent().text().replace(/^Input\/output:\s*/, '').trim();
   if (!title || !['grader', 'output-only', 'file', 'stdin / stdout'].includes(mode)) {
@@ -164,16 +174,31 @@ class TrainingClient {
     }
   }
 
-  async search(query, page = 1) {
-    const search = new URLSearchParams({ search: query.trim() });
-    const html = await this.read('/tasks/' + page + '?' + search, assetLimit);
-    return searchPage(html.toString('utf8'), page);
+  async search(query, page = 1, regional = false) {
+    const text = query.trim();
+    const search = new URLSearchParams({ search: regional ? shortTaskId(text) : text });
+    const html = await this.read('/tasks/' + (regional ? 'terry/' : '') + page + '?' + search, assetLimit);
+    return searchPage(html.toString('utf8'), page, regional);
   }
 
   async details(id) {
-    if (!taskPattern.test('/task/' + id)) throw new Error('Identificativo del problema non valido.');
+    if (!taskId.test(id)) throw new Error('Identificativo del problema non valido.');
     const html = (await this.read('/task/' + id, assetLimit)).toString('utf8');
-    const result = taskPage(html);
+    const result = taskPage(html, id);
+    if (isTerry(id)) {
+      const base = '/files/statements/secret/' + shortTaskId(id) + '/';
+      const markdown = (await this.read(base + 'statement.md', assetLimit)).toString('utf8');
+      const files = [];
+      for (const kind of ['input', 'output']) {
+        const example = new RegExp('^\\*\\*' + kind + ':\\*\\*[^\\r\\n]*\\r?\\n'
+          + '(?:[ \\t]*\\r?\\n)*[ \\t]*`{3}[^\\r\\n]*\\r?\\n([\\s\\S]*?)^[ \\t]*`{3}', 'im').exec(markdown);
+        if (example) files.push({ name: kind + '.txt', data: Buffer.from(example[1]) });
+      }
+      const statement = Buffer.from(markdown.replace(/(\]\()([\w][\w.-]*(?:\/[\w][\w.-]*)*)(?=[\s)])/g, '$1' + origin + base + '$2'));
+      const options = languages.map(language => ({ id: language, label: languageLabel(language),
+        starter: result.attachments.find(file => codeLanguage(file.name) === language) }));
+      return { id, ...result, files, options, notes: [], statement, pdf: [{ id: 'original', label: 'Originale (Markdown)' }] };
+    }
     const files = [...result.attachments];
     const notes = [];
     const archives = result.attachments.filter(file => /\.zip$/i.test(file.name));
