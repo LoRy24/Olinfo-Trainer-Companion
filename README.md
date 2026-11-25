@@ -1,4 +1,12 @@
-# Olinfo Trainer Companion
+<h1 align="center">
+  <img src="docs/branding/readme-banner.png" alt="Olinfo Trainer Companion" width="720">
+</h1>
+
+<p align="center">
+  <a href="https://github.com/LoRy24/Olinfo-Trainer-Companion/releases/latest"><img src="https://img.shields.io/github/v/release/LoRy24/Olinfo-Trainer-Companion?style=flat&amp;logo=github&amp;label=release&amp;labelColor=243248&amp;color=237648" alt="Ultima release"></a>
+  <a href="https://github.com/LoRy24/Olinfo-Trainer-Companion/actions/workflows/build.yml?query=branch%3Amaster"><img src="https://img.shields.io/github/actions/workflow/status/LoRy24/Olinfo-Trainer-Companion/build.yml?branch=master&amp;event=push&amp;style=flat&amp;logo=githubactions&amp;logoColor=white&amp;label=build&amp;labelColor=243248" alt="Stato della build su master"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/LoRy24/Olinfo-Trainer-Companion?style=flat&amp;label=licenza&amp;labelColor=243248&amp;color=496382" alt="Licenza MIT"></a>
+</p>
 
 Crea progetti per [Training Olinfo](https://training.olinfo.it/) in **VS Code**, **CLion**, **IntelliJ IDEA** e **PyCharm**. Scarica testo e sorgenti, invia la soluzione e segui la valutazione dall’IDE.
 
