@@ -59,8 +59,8 @@ test('catalogo, archivio, traduzione e generazione senza sovrascrittura', async 
   assert.deepEqual(details.options.map(option => option.id), ['cpp']);
   const folder = await temporary(t);
   const { target, solutionName } = await createProject(client, details, 'cpp', 'en-GB', folder, 'Demo progetto');
-  assert.equal(solutionName, 'file.cpp');
-  assert.deepEqual((await fs.readdir(target)).sort(), ['CMakeLists.txt', 'file.cpp', 'grader.cpp', 'input.txt', 'olinfo.xml', 'output.txt', 'testo.pdf']);
+  assert.equal(solutionName, 'demo_grader.cpp');
+  assert.deepEqual((await fs.readdir(target)).sort(), ['CMakeLists.txt', 'demo_grader.cpp', 'grader.cpp', 'input.txt', 'input10.txt', 'input2.txt', 'olinfo.xml', 'output.txt', 'output10.txt', 'output2.txt', 'testo.pdf']);
   assert.equal(await fs.readFile(path.join(target, 'input.txt'), 'utf8'), '2 2\n');
   assert.equal(await fs.readFile(path.join(target, 'output.txt'), 'utf8'), '4\n');
   assert.equal(await fs.readFile(path.join(target, 'testo.pdf'), 'utf8'), '%PDF-English');
@@ -77,7 +77,7 @@ test('programma autonomo senza allegati con file di I/O vuoti', async t => {
   const details = await client.details('demo_stdio');
   const folder = await temporary(t);
   const { target } = await createProject(client, details, 'py', 'it-IT', folder, 'Python');
-  assert.deepEqual((await fs.readdir(target)).sort(), ['file.py', 'input.txt', 'olinfo.xml', 'output.txt', 'testo.pdf']);
+  assert.deepEqual((await fs.readdir(target)).sort(), ['demo_stdio.py', 'input.txt', 'olinfo.xml', 'output.txt', 'testo.pdf']);
   assert.equal((await fs.stat(path.join(target, 'input.txt'))).size, 0);
   assert.equal((await fs.stat(path.join(target, 'output.txt'))).size, 0);
 
