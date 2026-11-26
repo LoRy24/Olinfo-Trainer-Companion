@@ -249,4 +249,4 @@ class TrainingClient {
   }
 }
 
-module.exports = { TrainingClient, searchPage, taskPage, languageLabel, statementPath, isHeader, samplePair };
+module.exports = { TrainingClient, searchPage, taskPage, languageLabel, statementPath, isHeader, samplePair, codeLanguage, sampleInfo };

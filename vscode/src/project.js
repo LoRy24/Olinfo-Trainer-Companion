@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { isHeader, samplePair } = require('./training');
-const { projectXml, shortTaskId } = require('./project-link');
+const { isHeader, samplePair, codeLanguage, sampleInfo } = require('./training');
+const { projectXml, shortTaskId, extensions } = require('./project-link');
 
 const native = new Set(['c', 'cpp']);
 
@@ -52,6 +52,12 @@ async function createProject(client, details, language, locale, parent, name) {
   const target = projectPath(parent, name);
   const option = details.options.find(item => item.id === language);
   if (!option) throw new Error('Linguaggio non disponibile per questo problema.');
+  if (!option.starter && language !== 'output') {
+    // Nome del template non riconosciuto: se esiste un solo sorgente non-grader di quel linguaggio, è il template.
+    const candidates = details.files.filter(file => codeLanguage(file.name) === language && !isHeader(file.name)
+      && !/^(?:grader|stub)(?:[._-][a-z0-9]+)?\.[a-z0-9]+$/i.test(file.name));
+    if (candidates.length === 1) option.starter = candidates[0];
+  }
   if (details.statement && locale !== 'original') throw new Error('Traduzione non disponibile.');
   if (!(await fs.stat(parent)).isDirectory()) throw new Error('La destinazione deve essere una cartella.');
   try {
@@ -61,19 +67,15 @@ async function createProject(client, details, language, locale, parent, name) {
     if (error.code !== 'ENOENT') throw error;
   }
 
-  const examples = samplePair(details.files);
-  const [statement, input, output, solution, grader] = await Promise.all([
-    details.statement ?? client.pdf(details, locale), client.asset(examples.input), client.asset(examples.output),
-    client.asset(option.starter), client.asset(option.grader),
+  const [statement, solution, grader] = await Promise.all([
+    details.statement ?? client.pdf(details, locale), client.asset(option.starter), client.asset(option.grader),
   ]);
-  const content = new Map([['input.txt', input], ['output.txt', output], [details.statement ? 'testo.md' : 'testo.pdf', statement]]);
+  const content = new Map([[details.statement ? 'testo.md' : 'testo.pdf', statement]]);
   let solutionName;
   if (language !== 'output') {
-    solutionName = (details.mode === 'terry' || language === 'java') && option.starter?.name
-      || (language === 'java' ? 'Main.java' : 'file.' + language);
-    if (language === 'cpp' && details.mode !== 'grader' && !option.starter && !option.grader) {
-      solutionName = shortTaskId(details.id) + '.cpp';
-    }
+    const validStarter = name => extensions[language]?.includes(path.extname(name).slice(1).toLowerCase());
+    solutionName = (option.starter?.name && validStarter(option.starter.name) && option.starter.name)
+      || (language === 'java' ? 'Main.java' : shortTaskId(details.id) + '.' + language);
     if (!/^[a-z0-9_][a-z0-9_.-]*$/i.test(solutionName)) throw new Error('Nome del sorgente non valido.');
     const graderName = option.grader && option.grader.name;
     content.set(solutionName, option.starter ? solution : starter(language, details.mode));
@@ -88,7 +90,18 @@ async function createProject(client, details, language, locale, parent, name) {
     }
   }
 
-  content.set('olinfo.xml', projectXml({ task: details.id, language, source: solutionName }));
+  // Scarica tutti i file nel linguaggio scelto e tutti i .txt/.in/.out
+  for (const file of details.files) {
+    if (content.has(file.name) || file.name === 'olinfo.xml' || /^(?:input|output)\.txt$/i.test(file.name)) continue;
+    if (!/^[a-z0-9_][a-z0-9_.-]*$/i.test(file.name)) continue;
+    const sameLanguage = language !== 'output' && codeLanguage(file.name) === language;
+    if (sameLanguage || sampleInfo(file.name) || /\.txt$/i.test(file.name)) {
+      content.set(file.name, await client.asset(file));
+    }
+  }
+
+
+content.set('olinfo.xml', projectXml({ task: details.id, language, source: solutionName }));
 
   // mkdir and exclusive writes make the final check safe even across two extension hosts.
   try {

@@ -59,10 +59,10 @@ test('catalogo, archivio, traduzione e generazione senza sovrascrittura', async 
   assert.deepEqual(details.options.map(option => option.id), ['cpp']);
   const folder = await temporary(t);
   const { target, solutionName } = await createProject(client, details, 'cpp', 'en-GB', folder, 'Demo progetto');
-  assert.equal(solutionName, 'file.cpp');
-  assert.deepEqual((await fs.readdir(target)).sort(), ['CMakeLists.txt', 'file.cpp', 'grader.cpp', 'input.txt', 'olinfo.xml', 'output.txt', 'testo.pdf']);
-  assert.equal(await fs.readFile(path.join(target, 'input.txt'), 'utf8'), '2 2\n');
-  assert.equal(await fs.readFile(path.join(target, 'output.txt'), 'utf8'), '4\n');
+  assert.equal(solutionName, 'demo_grader.cpp');
+  assert.deepEqual((await fs.readdir(target)).sort(), ['CMakeLists.txt', 'demo_grader.cpp', 'grader.cpp', 'input10.txt', 'input2.txt', 'olinfo.xml', 'output10.txt', 'output2.txt', 'testo.pdf']);
+  assert.equal(await fs.readFile(path.join(target, 'input2.txt'), 'utf8'), '2 2\n');
+  assert.equal(await fs.readFile(path.join(target, 'output2.txt'), 'utf8'), '4\n');
   assert.equal(await fs.readFile(path.join(target, 'testo.pdf'), 'utf8'), '%PDF-English');
   await assert.rejects(createProject(client, details, 'cpp', 'it-IT', folder, 'Demo progetto'), /Esiste già/);
   await assert.rejects(createProject(client, details, 'cpp', 'it-IT', folder, '../escape'), /nome cartella/);
@@ -70,20 +70,18 @@ test('catalogo, archivio, traduzione e generazione senza sovrascrittura', async 
   assert.deepEqual(await fs.readdir(folder), ['Demo progetto']);
 });
 
-test('programma autonomo senza allegati con file di I/O vuoti', async t => {
+test('programma autonomo senza allegati', async t => {
   const problem = (await fs.readFile(path.join(fixtures, 'problem.html'), 'utf8'))
     .replace('>grader<', '>stdin / stdout<').replace(/<aside>[\s\S]*?<\/aside>/, '');
   const client = new TrainingClient(async url => new Response(url.pathname.endsWith('/testo.pdf') ? bytes('%PDF-IT') : problem));
   const details = await client.details('demo_stdio');
   const folder = await temporary(t);
   const { target } = await createProject(client, details, 'py', 'it-IT', folder, 'Python');
-  assert.deepEqual((await fs.readdir(target)).sort(), ['file.py', 'input.txt', 'olinfo.xml', 'output.txt', 'testo.pdf']);
-  assert.equal((await fs.stat(path.join(target, 'input.txt'))).size, 0);
-  assert.equal((await fs.stat(path.join(target, 'output.txt'))).size, 0);
+  assert.deepEqual((await fs.readdir(target)).sort(), ['demo_stdio.py', 'olinfo.xml', 'testo.pdf']);
 
   const cpp = await createProject(client, details, 'cpp', 'it-IT', folder, 'Nome del progetto');
   assert.equal(cpp.solutionName, 'demo_stdio.cpp');
-  assert.deepEqual((await fs.readdir(cpp.target)).sort(), ['CMakeLists.txt', 'demo_stdio.cpp', 'input.txt', 'olinfo.xml', 'output.txt', 'testo.pdf']);
+  assert.deepEqual((await fs.readdir(cpp.target)).sort(), ['CMakeLists.txt', 'demo_stdio.cpp', 'olinfo.xml', 'testo.pdf']);
   const source = await fs.readFile(path.join(cpp.target, cpp.solutionName), 'utf8');
   assert.match(source, /^#include <bits\/stdc\+\+\.h>\nusing namespace std;\n\nint main\(\) \{/);
   assert.match(await fs.readFile(path.join(cpp.target, 'CMakeLists.txt'), 'utf8'), /add_executable\(solution "demo_stdio\.cpp"\)/);
@@ -98,11 +96,8 @@ test('catalogo reale, PDF italiano e inglese, grader e ZIP', { skip: process.env
   const folder = await temporary(t);
   const first = await createProject(client, graderTask, 'cpp', 'en-GB', folder, 'grado');
   assert.ok((await fs.stat(path.join(first.target, 'grader.cpp'))).size > 0);
-  assert.ok((await fs.stat(path.join(first.target, 'input.txt'))).size > 0);
   const program = await createProject(client, await client.details('easy2'), 'cpp', 'it-IT', folder, 'programma');
   assert.equal(program.solutionName, 'easy2.cpp');
-  assert.ok((await fs.stat(path.join(program.target, 'input.txt'))).size > 0);
-  assert.ok((await fs.stat(path.join(program.target, 'output.txt'))).size > 0);
   await assert.rejects(fs.stat(path.join(program.target, 'grader.cpp')), { code: 'ENOENT' });
   const missing = await client.details('oii_z');
   assert.equal(missing.options.find(item => item.id === 'cpp').grader, undefined);
